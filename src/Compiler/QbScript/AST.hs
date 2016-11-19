@@ -1,0 +1,88 @@
+module Compiler.QbScript.AST where
+
+import Data.Int(Int32)
+import Data.Map(Map)
+import Data.String.Unicode(UString)
+import Data.Word(Word32)
+
+data QbScript = QbScript (Maybe Struct) [Instruction] deriving (Show, Eq)
+
+data Instruction = BareCall QbKey [Expr]
+                 | Assign Name Expr
+                 | IfElse [(Expr, [Instruction])] [Instruction]     -- ^ IfElse [(Condition, Body)] [ElseBody]
+                 | Repeat Expr [Instruction]                        -- ^ Repeat xExpr [Body]
+                 | Switch Expr [(Lit, [Instruction])] [Instruction] -- ^ Switch Expr [(Case, Body)] [DefaultBody]
+                 deriving (Show, Eq)
+
+data QbType = TInt
+            | THex -- ^ Not understood.. unsigned int?
+            | TFloat
+            | TKey
+            | TString
+            | TWStrin
+            | TDict
+            | TArray QbType
+            | TStruct
+            deriving(Show, Eq)
+
+data Lit = LitN Int32
+         | LitH Word32
+         | LitF Float
+         | LitKey Name
+         | LitString String
+         | LitWString UString
+         | LitDict Dict
+         | LitArray Array
+         | LitStruct Struct
+         | LitPassthrough
+         deriving (Show, Eq)
+
+data QbKey = QbCrc Word32
+           | QbName String
+           deriving (Show, Eq)
+
+data Name = Local QbKey
+          | NonLocal QbKey
+          deriving (Show, Eq)
+
+data Dict = Dict Bool (Map QbKey Expr)
+          deriving (Show, Eq)
+
+data Array = Array [Lit]
+           deriving (Show, Eq)
+
+data Struct = Struct [StructItem]
+            deriving (Show, Eq)
+
+data StructItem = StructItem QbType QbKey Lit
+                deriving (Show, Eq)
+
+data Expr = Paren Expr
+          | ELit Lit
+          | Neg Expr
+          | And Expr Expr
+          | Or Expr Expr
+          | Xor Expr Expr
+          | Add Expr Expr
+          | Sub Expr Expr
+          | Mul Expr Expr
+          | Div Expr Expr
+          | Lt Expr Expr
+          | Lte Expr Expr
+          | Eq Expr Expr
+          | Gt Expr Expr
+          | Gte Expr Expr
+          | Neq Expr Expr
+          | Deref Expr
+          | Index Expr Expr
+          | Member Expr QbKey
+          | SMember Expr QbKey -- ^ Expr:QbKey.  Might be misnomer
+          | Call Expr [Expr]
+          -- TODO: Unknown operands
+          | Random
+          | Random2
+          | RandomRange
+          | RandomRange2
+          | RandomNoRepeat
+          | RandomPermute
+          deriving (Show, Eq)
