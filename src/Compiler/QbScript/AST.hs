@@ -1,5 +1,7 @@
 module Compiler.QbScript.AST where
 
+import Data.GH3.QB(QbKey, Struct)
+
 import Data.Int(Int32)
 import Data.Map(Map)
 import Data.String.Unicode(UString)
@@ -7,28 +9,32 @@ import Data.Word(Word32)
 
 data QbScript = QbScript (Maybe Struct) [Instruction] deriving (Show, Eq)
 
-data Instruction = BareCall QbKey [Expr]
+data Instruction = BareExpr Expr
                  | Assign Name Expr
                  | IfElse [(Expr, [Instruction])] [Instruction]     -- ^ IfElse [(Condition, Body)] [ElseBody]
                  | Repeat Expr [Instruction]                        -- ^ Repeat xExpr [Body]
-                 | Switch Expr [(Lit, [Instruction])] [Instruction] -- ^ Switch Expr [(Case, Body)] [DefaultBody]
+                 | Switch Expr [(SmallLit, [Instruction])] [Instruction] -- ^ Switch Expr [(Case, Body)] [DefaultBody]
                  deriving (Show, Eq)
 
-data QbType = TInt
-            | THex -- ^ Not understood.. unsigned int?
-            | TFloat
-            | TKey
-            | TString
-            | TWStrin
-            | TDict
-            | TArray QbType
-            | TStruct
-            deriving(Show, Eq)
+data Ty = TInt
+        | THex -- ^ Not understood.. unsigned int?
+        | TFloat
+        | TKey Ty
+        | TString
+        | TWString
+        | TDict
+        | TArray Ty
+        | TStruct
+        deriving(Show, Eq)
 
-data Lit = LitN Int32
-         | LitH Word32
+-- | "Small" literals that can be used in case expressions
+data SmallLit = LitN Int32
+              | LitH Word32
+              | LitKey Name
+              deriving (Show, Eq)
+
+data Lit = SmallLit SmallLit
          | LitF Float
-         | LitKey Name
          | LitString String
          | LitWString UString
          | LitDict Dict
@@ -37,29 +43,21 @@ data Lit = LitN Int32
          | LitPassthrough
          deriving (Show, Eq)
 
-data QbKey = QbCrc Word32
-           | QbName String
-           deriving (Show, Eq)
-
 data Name = Local QbKey
           | NonLocal QbKey
           deriving (Show, Eq)
 
-data Dict = Dict Bool (Map QbKey Expr)
+data Dict = ExtendsPT (Map QbKey Expr)
+          | Dict (Map QbKey Expr)
           deriving (Show, Eq)
 
-data Array = Array [Lit]
+data Array = Array [Expr]
            deriving (Show, Eq)
-
-data Struct = Struct [StructItem]
-            deriving (Show, Eq)
-
-data StructItem = StructItem QbType QbKey Lit
-                deriving (Show, Eq)
 
 data Expr = Paren Expr
           | ELit Lit
           | Neg Expr
+          | Not Expr
           | And Expr Expr
           | Or Expr Expr
           | Xor Expr Expr
@@ -76,8 +74,8 @@ data Expr = Paren Expr
           | Deref Expr
           | Index Expr Expr
           | Member Expr QbKey
-          | SMember Expr QbKey -- ^ Expr:QbKey.  Might be misnomer
-          | Call Expr [Expr]
+          | BareCall QbKey [(Maybe QbKey, Expr)]
+          | MethodCall Name QbKey [(Maybe QbKey, Expr)]
           -- TODO: Unknown operands
           | Random
           | Random2
