@@ -18,8 +18,14 @@ import           Text.Megaparsec.Text(Parser)
 
 -- * Lexer
 
+alpha :: [Char]
+alpha = ['A'..'Z'] ++ ['a'..'z']
+
+ident :: [Char]
+ident = alpha ++ ['0'..'9'] ++ "_"
+
 identChar :: Parser Char
-identChar = oneOf $ ['A'..'Z'] ++ ['a'..'z'] ++ ['0'..'9'] ++ "_"
+identChar = oneOf ident
 
 spaceChar' :: Parser ()
 spaceChar' = void (char ' ' <|> char '\t')
@@ -96,7 +102,7 @@ rword :: String -> Parser ()
 rword w = try $ string' w *> notFollowedBy identChar *> spaceConsumer
 
 identifier :: Parser String
-identifier = (lexeme . try) (some identChar >>= check)
+identifier = (lexeme . try) (((:) <$> oneOf alpha <*> many identChar) >>= check)
   where
     check x = if fmap toLower x `elem` reservedWords
                  then fail $ "keyword " ++ show x ++ " cannot be an identifier"
@@ -117,6 +123,11 @@ passthrough = void (symbol "<...>")
 
 -- * Parser
 
+qbScript :: Parser QbScript
+qbScript = QbScript <$> (rword "script" *> parens (optional struct) <* newline)
+                    <*> many instruction
+                    <*  rword "endscript"
+
 -- * Literals
 
 lit :: Parser Lit
@@ -135,8 +146,8 @@ lit = choice $ fmap try
 
 smallLit :: Parser SmallLit
 smallLit = choice $ fmap try
-             [ LitN . fromInteger <$> decimal
-             , LitH . fromInteger <$> hexadecimal
+             [ LitH . fromInteger <$> hexadecimal
+             , LitN . fromInteger <$> decimal
              , LitKey <$> name
              ]
 
@@ -263,7 +274,7 @@ else' =  rword "else" *> newline *> instructions
 
 repeat :: Parser Instruction
 repeat = flip Repeat <$> between (rword "begin" <* newline) (rword "repeat") instructions
-                     <*> expr
+                     <*> parens expr
 
 switch :: Parser Instruction
 switch = Switch <$> (rword "switch" *> expr <* newline)

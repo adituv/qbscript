@@ -19,6 +19,8 @@ data Instruction = BareExpr Expr
 data Ty = TInt
         | THex -- ^ Not understood.. unsigned int?
         | TFloat
+        | TVec2
+        | TVec3
         | TKey Ty
         | TString
         | TWString
