@@ -3,7 +3,7 @@ module Compiler.QbScript.Parser where
 import           Prelude hiding(repeat)
 
 import           Compiler.QbScript.AST
-import           Data.GH3.QB(QbKey(..), Struct, canonicalise)
+import           Data.GH3.QB
 
 import           Control.Monad(void)
 import           Data.Char(toLower)
@@ -71,6 +71,9 @@ comma = void $ symbol ","
 colon :: Parser ()
 colon = void $ symbol ":"
 
+semicolon :: Parser ()
+semicolon = void $ symbol ";"
+
 equals :: Parser ()
 equals = void $ symbol "="
 
@@ -120,6 +123,8 @@ lit :: Parser Lit
 lit = choice $ fmap try
         [ LitF <$> float
         , SmallLit <$> smallLit
+        , parens (LitV2 <$> float <*> (comma *> float))
+        , parens (LitV3 <$> float <*> (comma *> float) <*> (comma *> float))
         , LitString <$> narrowString
         , LitWString <$> wideString
         , LitDict <$> dict
@@ -159,7 +164,68 @@ array = Array <$> brackets (expr `sepBy` comma)
 -- ** Structs
 
 struct :: Parser Struct
-struct = fail "TODO"
+struct = Struct <$> braces (optional newline
+                         *> structItem `sepBy` try (newline *> notFollowedBy (symbol "}"))
+                         <* optional newline)
+
+structItem :: Parser StructItem
+structItem = do
+  ty <- qbType
+  k <- QbCrc 0 <$ try (symbol "_") <|> qbKey
+  equals
+  v <- qbValue ty
+  semicolon
+  return $ StructItem ty k v
+
+qbType :: Parser QbType
+qbType = choice (fmap try
+           [ QbTInteger <$ symbol "int"
+           , QbTFloat <$ symbol "float"
+           , QbTString <$ symbol "string"
+           , QbTWString <$ symbol "wstring"
+           , QbTVector2 <$ symbol "vector2"
+           , QbTVector3 <$ symbol "vector3"
+           , QbTStruct <$ symbol "struct"
+           , QbTArray <$ symbol "array"
+           , QbTKey <$ symbol "qbkey"
+           , QbTKeyRef <$ symbol "qbkeyref"
+           , QbTStringPointer <$ symbol "stringptr"
+           , QbTStringQs <$ symbol "stringqs"
+           ]) <?> "struct item type"
+
+
+qbValue :: QbType -> Parser QbValue
+qbValue QbTInteger = QbInteger . fromInteger <$> (try (char '0' *> char 'x') *> hexadecimal
+                                             <|> decimal)
+qbValue QbTFloat = QbFloat <$> float
+qbValue QbTString = QbString <$> narrowString
+qbValue QbTWString = QbString <$> wideString
+qbValue QbTVector2 = parens (QbVector2 <$> float <*> (comma *> float))
+qbValue QbTVector3 = parens (QbVector3 <$> float <*> (comma *> float) <*> (comma *> float))
+qbValue QbTStruct = QbStruct <$> struct
+qbValue QbTArray = QbArray <$> qbArray
+qbValue QbTKey = QbKey <$> qbKey
+qbValue QbTKeyRef = QbKeyRef <$> qbKey
+qbValue QbTStringPointer = QbStringPointer <$> qbKey
+qbValue QbTStringQs = QbStringQs <$> qbKey
+
+
+qbArray :: Parser QbArray
+qbArray = brackets $ QbArr <$> choice
+            [ qbValue QbTInteger `sepBy` (comma <* optional newline)
+            , qbValue QbTFloat `sepBy` (comma <* optional newline)
+            , qbValue QbTString `sepBy` (comma <* optional newline)
+            , qbValue QbTWString `sepBy` (comma <* optional newline)
+            , qbValue QbTVector2 `sepBy` (comma <* optional newline)
+            , qbValue QbTVector3 `sepBy` (comma <* optional newline)
+            , qbValue QbTStruct `sepBy` (comma <* optional newline)
+            , qbValue QbTArray `sepBy` (comma <* optional newline)
+            , qbValue QbTKey `sepBy` (comma <* optional newline)
+            , qbValue QbTKeyRef `sepBy` (comma <* optional newline)
+            , qbValue QbTStringPointer `sepBy` (comma <* optional newline)
+            , qbValue QbTStringQs `sepBy` (comma <* optional newline)
+            ]
+
 
 -- * Instructions
 

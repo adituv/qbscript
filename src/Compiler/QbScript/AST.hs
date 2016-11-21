@@ -35,6 +35,8 @@ data SmallLit = LitN Int32
 
 data Lit = SmallLit SmallLit
          | LitF Float
+         | LitV2 Float Float
+         | LitV3 Float Float Float
          | LitString String
          | LitWString UString
          | LitDict Dict
