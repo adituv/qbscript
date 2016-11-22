@@ -3,7 +3,6 @@ module Compiler.QbScript.AST where
 import Data.GH3.QB(QbKey, Struct)
 
 import Data.Int(Int32)
-import Data.Map(Map)
 import Data.String.Unicode(UString)
 import Data.Word(Word32)
 
@@ -14,6 +13,7 @@ data Instruction = BareExpr Expr
                  | IfElse [(Expr, [Instruction])] [Instruction]     -- ^ IfElse [(Condition, Body)] [ElseBody]
                  | Repeat Expr [Instruction]                        -- ^ Repeat xExpr [Body]
                  | Switch Expr [(SmallLit, [Instruction])] [Instruction] -- ^ Switch Expr [(Case, Body)] [DefaultBody]
+                 | Break
                  deriving (Show, Eq)
 
 data Ty = TInt
@@ -51,8 +51,8 @@ data Name = Local QbKey
           | NonLocal QbKey
           deriving (Show, Eq)
 
-data Dict = ExtendsPT (Map QbKey Expr)
-          | Dict (Map QbKey Expr)
+data Dict = ExtendsPT [(QbKey, Expr)]
+          | Dict [(QbKey, Expr)]
           deriving (Show, Eq)
 
 data Array = Array [Expr]

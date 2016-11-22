@@ -7,8 +7,6 @@ import           Data.GH3.QB
 
 import           Control.Monad(void)
 import           Data.Char(toLower)
-import           Data.Map(Map)
-import qualified Data.Map.Strict as M
 import           Data.Scientific(toRealFloat)
 import           Data.Word(Word32)
 import           Text.Megaparsec hiding(newline)
@@ -108,15 +106,19 @@ identifier = (lexeme . try) (((:) <$> oneOf alpha <*> many identChar) >>= check)
                  then fail $ "keyword " ++ show x ++ " cannot be an identifier"
                  else return x
 
+-- | Workaround because L.charLiteral does not parse \&
+charLiteral :: Parser Char
+charLiteral = optional (try $ char '\\' *> char '&') *> L.charLiteral
+
 narrowString :: Parser String
-narrowString = lexeme $ char '\'' *> manyTill (L.charLiteral >>= check) (char '\'')
+narrowString = lexeme $ char '\'' *> manyTill (charLiteral >>= check) (char '\'')
   where
-    check x = if fromEnum x < 256
+    check x = if fromEnum x < 128
                 then return x
                 else fail $ "character " ++ show x ++ " out of range in narrow string"
 
 wideString :: Parser String
-wideString = lexeme $ char '"' *> manyTill L.charLiteral (char '"')
+wideString = lexeme $ char '"' *> manyTill charLiteral (char '"')
 
 passthrough :: Parser ()
 passthrough = void (symbol "<...>")
@@ -160,24 +162,27 @@ qbKey =  QbCrc <$> checksum
      <|> QbName <$> identifier
 
 dict :: Parser Dict
-dict = braces $ ExtendsPT <$> (passthrough *> comma *> dict')
-             <|> Dict <$> dict'
+dict = braces $ optional newline *>
+            (ExtendsPT <$> (passthrough *> comma *> optional newline *> dict')
+         <|> Dict <$> dict')
   where
-    dict' :: Parser (Map QbKey Expr)
-    dict' = M.fromList <$> entry `sepBy` comma
+    dict' :: Parser [(QbKey, Expr)]
+    dict' = entry `sepBy` (comma <* optional newline)
+         <*  optional newline
 
     entry :: Parser (QbKey, Expr)
-    entry = (,) <$> (canonicalise <$> qbKey) <*> (colon *> expr)
+    entry = (,) <$> qbKey <*> (colon *> expr)
 
 array :: Parser Array
-array = Array <$> brackets (expr `sepBy` comma)
+array = Array <$> brackets (optional newline *> expr `sepBy` (comma <* optional newline)
+                         <* optional newline)
 
 -- ** Structs
 
 struct :: Parser Struct
 struct = Struct <$> braces (optional newline
-                         *> structItem `sepBy` try (newline *> notFollowedBy (symbol "}"))
-                         <* optional newline)
+                         *> structItem `sepBy` try (semicolon <* optional newline <* notFollowedBy (symbol "}"))
+                         <* semicolon <* optional newline)
 
 structItem :: Parser StructItem
 structItem = do
@@ -185,7 +190,6 @@ structItem = do
   k <- QbCrc 0 <$ try (symbol "_") <|> qbKey
   equals
   v <- qbValue ty
-  semicolon
   return $ StructItem ty k v
 
 qbType :: Parser QbType
@@ -252,6 +256,7 @@ instruction = choice (fmap try
   , ifelse
   , repeat
   , switch
+  , Break <$ rword "break"
   , BareExpr <$> expr
   ]) <* lineTerm
 
@@ -279,12 +284,11 @@ repeat = flip Repeat <$> between (rword "begin" <* newline) (rword "repeat") ins
 switch :: Parser Instruction
 switch = Switch <$> (rword "switch" *> expr <* newline)
                 <*> many case'
-                <*> (rword "default:" *> instructions <|> pure [])
+                <*> (rword "default:" *> newline *> instructions <|> pure [])
                 <*  rword "endswitch"
 
 case' :: Parser (SmallLit, [Instruction])
-case' = (,) <$> (rword "case" *> char ' '
-                  *> (smallLit <* colon <* newline))
+case' = (,) <$> (rword "case" *> (smallLit <* colon <* newline))
             <*> instructions
 
 -- * Expressions
@@ -294,8 +298,8 @@ expr = makeExprParser term opTable
 term :: Parser Expr
 term = choice (fmap try
   [ Paren <$> parens expr
-  , MethodCall <$> (name <* colon) <*> qbKey <*> parens (argument `sepBy` comma)
-  , BareCall <$> qbKey <*> parens (argument `sepBy` comma)
+  , MethodCall <$> (name <* colon) <*> qbKey <*> parens (try argument `sepBy` comma)
+  , BareCall <$> qbKey <*> parens (try argument `sepBy` comma)
   , Member <$> (try (parens expr) <|> ELit . SmallLit . LitKey <$> name)
            <*> (op "." *> qbKey)
   , Index <$> (try (parens expr) <|> ELit . SmallLit . LitKey <$> name)

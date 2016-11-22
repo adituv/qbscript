@@ -18,14 +18,14 @@ library
   exposed-modules:     Compiler.QbScript.AST
                      , Compiler.QbScript.Parser
                      , Data.GH3.QB
-  build-depends:       base >= 4.7 && < 5,
-                       binary, 
-                       bytestring,
-                       containers,
-                       digest, 
-                       hxt-unicode,
-                       megaparsec,
-                       scientific
+  build-depends:       base >= 4.7 && < 5
+                     , binary 
+                     , bytestring
+                     , containers
+                     , digest
+                     , hxt-unicode
+                     , megaparsec
+                     , scientific
   default-language:    Haskell2010
 
 executable qbscript-exe
@@ -41,6 +41,7 @@ test-suite qbscript-test
   hs-source-dirs:      test
   main-is:             Spec.hs
   build-depends:       base
+                     , containers
                      , hspec
                      , hspec-megaparsec
                      , megaparsec
