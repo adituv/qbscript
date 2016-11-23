@@ -2,6 +2,7 @@ module Compiler.QbScript.AST where
 
 import Data.GH3.QB(QbKey, Struct)
 
+import Control.Arrow(second)
 import Data.Int(Int32)
 import Data.String.Unicode(UString)
 import Data.Word(Word32)
@@ -88,3 +89,40 @@ data Expr = Paren Expr
           | RandomNoRepeat
           | RandomPermute
           deriving (Show, Eq)
+
+-- | Replace @Neg [signed literal]@ with a literal of opposite sign
+compressNegs :: Instruction -> Instruction
+compressNegs (BareExpr x) = BareExpr $ negLit x
+compressNegs (Assign n x) = Assign n $ negLit x
+compressNegs (IfElse conds elses) = IfElse (fmap (second (fmap compressNegs)) conds)
+                                        (fmap compressNegs elses)
+compressNegs (Repeat x body) = Repeat (negLit x) (fmap compressNegs body)
+compressNegs (Switch x cases defaults) = Switch (negLit x)
+                                            (fmap (second (fmap compressNegs)) cases)
+                                            (fmap compressNegs defaults)
+compressNegs Break = Break
+
+negLit :: Expr -> Expr
+negLit (Paren x) = Paren (negLit x)
+negLit (Neg x) = case negLit x of
+  Neg (ELit (LitF y))            -> ELit (LitF (-y))
+  Neg (ELit (SmallLit (LitN y))) -> ELit (SmallLit (LitN (-y)))
+  y                              -> y
+negLit (Not x) = Not (negLit x)
+negLit (And x y) = And (negLit x) (negLit y)
+negLit (Or x y) = Or (negLit x) (negLit y)
+negLit (Xor x y) = Xor (negLit x) (negLit y)
+negLit (Add x y) = Add (negLit x) (negLit y)
+negLit (Sub x y) = Sub (negLit x) (negLit y)
+negLit (Mul x y) = Mul (negLit x) (negLit y)
+negLit (Div x y) = Div (negLit x) (negLit y)
+negLit (Lt x y) = Lt (negLit x) (negLit y)
+negLit (Lte x y) = Lte (negLit x) (negLit y)
+negLit (Gt x y) = Gt (negLit x) (negLit y)
+negLit (Neq x y) = Neq (negLit x) (negLit y)
+negLit (Deref x) = Deref (negLit x)
+negLit (Index x y) = Index (negLit x) (negLit y)
+negLit (Member x y) = Member (negLit x) y
+negLit (BareCall q args) = BareCall q (fmap (second negLit) args)
+negLit (MethodCall n q args) = MethodCall n q (fmap (second negLit) args)
+negLit x = x
