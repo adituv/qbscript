@@ -2,7 +2,7 @@ module Compiler.QbScript.AST where
 
 import Data.GH3.QB(QbKey, Struct)
 
-import Control.Arrow(second)
+import Control.Arrow((***), second)
 import Data.Int(Int32)
 import Data.String.Unicode(UString)
 import Data.Word(Word32)
@@ -11,7 +11,7 @@ data QbScript = QbScript (Maybe Struct) [Instruction] deriving (Show, Eq)
 
 data Instruction = BareExpr Expr
                  | Assign Name Expr
-                 | IfElse [(Expr, [Instruction])] [Instruction]     -- ^ IfElse [(Condition, Body)] [ElseBody]
+                 | IfElse (Expr, [Instruction]) [(Expr, [Instruction])] [Instruction]     -- ^ IfElse [(Condition, Body)] [ElseBody]
                  | Repeat Expr [Instruction]                        -- ^ Repeat xExpr [Body]
                  | Switch Expr [(SmallLit, [Instruction])] [Instruction] -- ^ Switch Expr [(Case, Body)] [DefaultBody]
                  | Break
@@ -94,8 +94,10 @@ data Expr = Paren Expr
 compressNegs :: Instruction -> Instruction
 compressNegs (BareExpr x) = BareExpr $ negLit x
 compressNegs (Assign n x) = Assign n $ negLit x
-compressNegs (IfElse conds elses) = IfElse (fmap (second (fmap compressNegs)) conds)
-                                        (fmap compressNegs elses)
+compressNegs (IfElse if' elseifs else') =
+  IfElse (negLit *** fmap compressNegs $ if')
+         (fmap (negLit *** fmap compressNegs) elseifs)
+         (fmap compressNegs else')
 compressNegs (Repeat x body) = Repeat (negLit x) (fmap compressNegs body)
 compressNegs (Switch x cases defaults) = Switch (negLit x)
                                             (fmap (second (fmap compressNegs)) cases)

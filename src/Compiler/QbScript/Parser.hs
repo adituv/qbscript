@@ -261,7 +261,8 @@ instruction = choice (fmap try
   ]) <* lineTerm
 
 ifelse :: Parser Instruction
-ifelse = IfElse <$> ((:) <$> if' <*> many elseif)
+ifelse = IfElse <$> if'
+                <*> many elseif
                 <*> else'
                 <*  rword "endif"
 
