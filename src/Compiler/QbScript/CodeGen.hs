@@ -3,13 +3,14 @@ module Compiler.QbScript.CodeGen where
 import Compiler.QbScript.AST
 import Data.GH3.QB
 
+import Control.Monad.Reader
 import Control.Monad.State.Strict
 import Data.ByteString(ByteString)
 import Data.Packer
 import Data.Word
 
 genScriptCode :: QbScript -> ByteString
-genScriptCode = runPacking 1024 . putScript
+genScriptCode = runPacking 4096 . putScript
 
 putScript :: QbScript -> Packing ()
 putScript (QbScript args instrs) = do
@@ -58,8 +59,68 @@ putInstr (Repeat expr body) = do
   mapM_ putInstr body
   putWord16BE 0x0121
   putExpr expr
-putInstr (Switch expr cases default') = fail "switch not yet supported"
+putInstr (Switch expr cases default') = putSwitch expr cases default'
 putInstr Break = putWord16BE 0x0122
+
+putSwitch :: Expr -> [(SmallLit, [Instruction])] -> [Instruction] -> Packing ()
+putSwitch expr cases default' = do
+  putWord16BE 0x013C
+  putExpr expr
+  putWord8 0x01
+  case cases of
+    [] -> putSwitchNoCases default'
+    (l, body):cs -> do
+      putWord16BE 0x3E49
+      start <- packGetPosition
+      h <- putHoleWord16LE
+      putSmallLit l
+      mapM_ putInstr body
+      st <- execStateT (mapM_ putCase cs) (BranchState (H start h) [])
+      (BranchState nh lhs) <- execStateT (putDefault default') st
+      pos <- packGetPosition
+      fillOffsetHole (pos+1) nh
+      mapM_ (fillOffsetHole (pos+2)) lhs
+      putWord16BE 0x013D
+
+putSwitchNoCases :: [Instruction] -> Packing ()
+putSwitchNoCases body = do
+  putWord16BE 0x3F49
+  start <- packGetPosition
+  h <- putHoleWord16LE
+  mapM_ putInstr body
+  pos <- packGetPosition
+  fillHole h (fromIntegral $ pos - start + 1)
+  putWord16BE 0x013D
+
+putCase :: (SmallLit, [Instruction]) -> StateT BranchState Packing ()
+putCase (l, body) = do
+  BranchState nh lhs <- get
+  (nh', lh') <- lift $ do
+    putWord16BE 0x0149
+    pos <- packGetPosition
+    lh' <- putHoleWord16LE
+    fillOffsetHole (pos+2) nh
+    putWord16BE 0x3E49
+    nh' <- putHoleWord16LE
+    putSmallLit l
+    mapM_ putInstr body
+    return (H (pos+4) nh', H pos lh')
+  put $ BranchState nh' (lh':lhs)
+
+putDefault :: [Instruction] -> StateT BranchState Packing ()
+putDefault body = do
+  BranchState nh lhs <- get
+  (nh',lh') <- lift $ do
+    putWord16BE 0x0149
+    pos <- packGetPosition
+    lh' <- putHoleWord16LE
+    fillOffsetHole (pos+2) nh
+    putWord16BE 0x3F49
+    nh' <- putHoleWord16LE
+    mapM_ putInstr body
+    return (H (pos+4) nh', H pos lh')
+  put $ BranchState nh' (lh':lhs)
+
 
 putIf :: (Expr, [Instruction]) -> Packing OffsetHole
 putIf (cond, body) = do
@@ -249,4 +310,74 @@ putInfix op e1 e2 = do
   putExpr e2
 
 putStruct :: Struct -> Packing ()
-putStruct = fail "struct codegen not yet supported"
+putStruct (Struct items) = do
+  start <- packGetPosition
+  putWord32BE 0x00010000
+  firstEntry <- putHoleWord32BE
+  lastHole <- flip runReaderT start
+            . flip execStateT firstEntry
+            . mapM_ putStructItem
+            $ items
+  fillHole lastHole 0
+
+putStructItem :: StructItem -> StateT (Hole Word32) (ReaderT Int Packing) ()
+putStructItem (StructItem ty key value) = do
+  prevHole <- get
+  startPos <- ask
+  hole <- lift . lift $ do
+    pos <- packGetPosition
+    fillHole prevHole (fromIntegral $ pos - startPos)
+    putQbType ty
+    putQbKey key
+    vh <- putQbValue value
+    nh <- putHoleWord32BE
+    pos' <- packGetPosition
+    case vh of
+      Nothing -> pure ()
+      Just h -> fillHole h (fromIntegral $ pos' - startPos)
+    putQbValueData value
+    return nh
+  put hole
+  return ()
+
+putQbType :: QbType -> Packing ()
+putQbType QbTInteger       = putWord32BE 0x00810000
+putQbType QbTFloat         = putWord32BE 0x00820000
+putQbType QbTString        = putWord32BE 0x00830000
+putQbType QbTWString       = putWord32BE 0x00840000
+putQbType QbTVector2       = putWord32BE 0x00850000
+putQbType QbTVector3       = putWord32BE 0x00860000
+putQbType QbTStruct        = putWord32BE 0x008A0000
+putQbType QbTArray         = putWord32BE 0x008C0000
+putQbType QbTKey           = putWord32BE 0x008D0000
+putQbType QbTKeyRef        = putWord32BE 0x009A0000
+putQbType QbTStringPointer = putWord32BE 0x009B0000
+putQbType QbTStringQs      = putWord32BE 0x009C0000
+
+putQbKey :: QbKey -> Packing ()
+putQbKey q@(QbName _) = putQbKey (canonicalise q)
+putQbKey (QbCrc k) = putWord32BE k
+
+putQbValue :: QbValue -> Packing (Maybe (Hole Word32))
+putQbValue (QbInteger n)       = putWord32BE (fromIntegral n) >> pure Nothing
+putQbValue (QbFloat f)         = putFloat32BE f >> pure Nothing
+putQbValue (QbString _)        = Just <$> putHoleWord32BE
+putQbValue (QbWString _)       = Just <$> putHoleWord32BE
+putQbValue  QbVector2{}        = Just <$> putHoleWord32BE
+putQbValue  QbVector3{}        = Just <$> putHoleWord32BE
+putQbValue (QbStruct _)        = Just <$> putHoleWord32BE
+putQbValue (QbArray _)         = Just <$> putHoleWord32BE
+putQbValue (QbKey k)           = putQbKey k >> pure Nothing
+putQbValue (QbKeyRef k)        = putQbKey k >> pure Nothing
+putQbValue (QbStringPointer k) = putQbKey k >> pure Nothing
+putQbValue (QbStringQs k)      = putQbKey k >> pure Nothing
+
+putQbValueData :: QbValue -> Packing ()
+putQbValueData (QbString s) = mapM_ (putWord8 . fromIntegral . fromEnum) s
+putQbValueData (QbWString s) = mapM_ (putWord16BE . fromIntegral . fromEnum) s
+putQbValueData (QbVector2 x y) = putFloat32BE x >> putFloat32BE y
+putQbValueData (QbVector3 x y z) = putFloat32BE x >> putFloat32BE y >> putFloat32BE z
+putQbValueData (QbStruct s) = putStruct s
+putQbValueData (QbArray a) = error "TODO"
+putQbValueData _           = pure ()
+
