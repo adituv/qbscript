@@ -226,21 +226,12 @@ qbValue QbTStringQs = QbStringQs <$> qbKey
 
 
 qbArray :: Parser QbArray
-qbArray = brackets $ QbArr <$> choice
-            [ qbValue QbTInteger `sepBy` (comma <* optional newline)
-            , qbValue QbTFloat `sepBy` (comma <* optional newline)
-            , qbValue QbTString `sepBy` (comma <* optional newline)
-            , qbValue QbTWString `sepBy` (comma <* optional newline)
-            , qbValue QbTVector2 `sepBy` (comma <* optional newline)
-            , qbValue QbTVector3 `sepBy` (comma <* optional newline)
-            , qbValue QbTStruct `sepBy` (comma <* optional newline)
-            , qbValue QbTArray `sepBy` (comma <* optional newline)
-            , qbValue QbTKey `sepBy` (comma <* optional newline)
-            , qbValue QbTKeyRef `sepBy` (comma <* optional newline)
-            , qbValue QbTStringPointer `sepBy` (comma <* optional newline)
-            , qbValue QbTStringQs `sepBy` (comma <* optional newline)
-            ]
-
+qbArray = brackets $ choice [ QbArr t <$> qbValue t `sepBy` (comma <* optional newline)
+                            | t <- qbTypes]
+  where
+    qbTypes :: [QbType]
+    qbTypes = [ QbTInteger, QbTFloat, QbTString, QbTWString, QbTVector2, QbTVector3, QbTStruct
+              , QbTArray, QbTKey, QbTKeyRef, QbTStringPointer, QbTStringQs]
 
 -- * Instructions
 

@@ -47,7 +47,7 @@ data Struct = Struct [StructItem]
 data StructItem = StructItem QbType QbKey QbValue
                 deriving (Show, Eq)
 
-data QbArray = QbArr [QbValue] deriving (Show, Eq)
+data QbArray = QbArr QbType [QbValue] deriving (Show, Eq)
 
 canonicalise :: QbKey -> QbKey
 canonicalise (QbCrc x) = QbCrc x

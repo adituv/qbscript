@@ -110,20 +110,21 @@ instructionTests =
           Assign (Local $ QbCrc x) (ELit (LitF 1))
     it "can parse an if with no else branches" $
       parse instruction "" "if 1.0\n  doSomething()\nendif" `shouldParse`
-        IfElse [(ELit (LitF 1), [BareExpr $ BareCall (QbName "doSomething") []])] []
+        IfElse (ELit (LitF 1), [BareExpr $ BareCall (QbName "doSomething") []]) [] []
     it "can parse an if/elseif" $
       parse instruction "" "if 1.0\n  doSomething()\nelseif 2.0\n  doNothing()\nendif"
-        `shouldParse` IfElse [(ELit (LitF 1), [BareExpr $ BareCall (QbName "doSomething") []])
-                             ,(ELit (LitF 2), [BareExpr $ BareCall (QbName "doNothing") []])]
+        `shouldParse` IfElse (ELit (LitF 1), [BareExpr $ BareCall (QbName "doSomething") []])
+                             [(ELit (LitF 2), [BareExpr $ BareCall (QbName "doNothing") []])]
                              []
     it "can parse an if/else" $
       parse instruction "" "if 1.0\n  doSomething()\nelse\n  doNothing()\nendif"
-        `shouldParse` IfElse [(ELit (LitF 1), [BareExpr $ BareCall (QbName "doSomething") []])]
+        `shouldParse` IfElse (ELit (LitF 1), [BareExpr $ BareCall (QbName "doSomething") []])
+                             []
                              [BareExpr $ BareCall (QbName "doNothing") []]
     it "can parse an if/elseif/else" $
       parse instruction "" "if 1.0\n  doSomething()\nelseif 2.0\n  doNothing()\nelse\n  doNothing()\nendif"
-        `shouldParse` IfElse [(ELit (LitF 1), [BareExpr $ BareCall (QbName "doSomething") []])
-                             ,(ELit (LitF 2), [BareExpr $ BareCall (QbName "doNothing") []])]
+        `shouldParse` IfElse (ELit (LitF 1), [BareExpr $ BareCall (QbName "doSomething") []])
+                             [(ELit (LitF 2), [BareExpr $ BareCall (QbName "doNothing") []])]
                              [BareExpr $ BareCall (QbName "doNothing") []]
     it "can parse a begin/repeat" $
       parse instruction "" "begin\n  doSomething()\nrepeat (4)" `shouldParse`
