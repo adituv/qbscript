@@ -16,7 +16,7 @@ putScript :: QbScript -> Packing ()
 putScript (QbScript args instrs) = do
   case args of
     Nothing -> pure ()
-    (Just s) -> putStruct s
+    (Just s) -> putLit (LitStruct s)
   mapM_ putInstr instrs
 
   putWord16BE 0x0124
@@ -31,8 +31,16 @@ data OffsetHole = H !Int !(Hole Word16)
 updateHoles :: OffsetHole -> OffsetHole -> BranchState -> BranchState
 updateHoles n l (BranchState _ lastHoles) = BranchState n (l:lastHoles)
 
-fillOffsetHole :: Int -> OffsetHole -> Packing ()
-fillOffsetHole pos (H p h) = fillHole h (fromIntegral $ pos - p)
+putOffsetHole :: Packing OffsetHole
+putOffsetHole = do
+  pos <- packGetPosition
+  hole <- putHoleWord16LE
+  return $ H pos hole
+
+fillOffsetHole :: OffsetHole -> Packing ()
+fillOffsetHole (H p h) = do
+  pos <- packGetPosition
+  fillHole h (fromIntegral $ pos - p)
 
 putInstr :: Instruction -> Packing ()
 putInstr (BareExpr expr) = do
@@ -50,10 +58,8 @@ putInstr (IfElse if' elseifs else') = do
 
     putWord16BE 0x0128
 
-    pos <- packGetPosition
-
-    fillOffsetHole pos nh
-    mapM_ (fillOffsetHole pos) lhs
+    fillOffsetHole nh
+    mapM_ fillOffsetHole lhs
 putInstr (Repeat expr body) = do
   putWord16BE 0x0120
   mapM_ putInstr body
@@ -77,40 +83,37 @@ putSwitch expr cases default' = do
     [] -> putSwitchNoCases default'
     (l, body):cs -> do
       putWord16BE 0x3E49
-      start <- packGetPosition
-      h <- putHoleWord16LE
+      h <- putOffsetHole
       putSmallLit l
       mapM_ putInstr body
-      st <- execStateT (mapM_ putCase cs) (BranchState (H start h) [])
+      st <- execStateT (mapM_ putCase cs) (BranchState h [])
       (BranchState nh lhs) <- execStateT (putDefault default') st
-      pos <- packGetPosition
-      fillOffsetHole (pos+1) nh
-      mapM_ (fillOffsetHole (pos+2)) lhs
-      putWord16BE 0x013D
+      putWord8 0x01
+      fillOffsetHole nh
+      putWord8 0x3D
+      mapM_ fillOffsetHole lhs
 
 putSwitchNoCases :: [Instruction] -> Packing ()
 putSwitchNoCases body = do
   putWord16BE 0x3F49
-  start <- packGetPosition
-  h <- putHoleWord16LE
+  h <- putOffsetHole
   mapM_ putInstr body
-  pos <- packGetPosition
-  fillHole h (fromIntegral $ pos - start + 1)
-  putWord16BE 0x013D
+  putWord8 0x01
+  fillOffsetHole h
+  putWord8 0x3D
 
 putCase :: (SmallLit, [Instruction]) -> StateT BranchState Packing ()
 putCase (l, body) = do
   BranchState nh lhs <- get
   (nh', lh') <- lift $ do
     putWord16BE 0x0149
-    pos <- packGetPosition
-    lh' <- putHoleWord16LE
-    fillOffsetHole (pos+2) nh
+    lh' <- putOffsetHole
+    fillOffsetHole nh
     putWord16BE 0x3E49
-    nh' <- putHoleWord16LE
+    nh' <- putOffsetHole
     putSmallLit l
     mapM_ putInstr body
-    return (H (pos+4) nh', H pos lh')
+    return (nh', lh')
   put $ BranchState nh' (lh':lhs)
 
 putDefault :: [Instruction] -> StateT BranchState Packing ()
@@ -118,24 +121,22 @@ putDefault body = do
   BranchState nh lhs <- get
   (nh',lh') <- lift $ do
     putWord16BE 0x0149
-    pos <- packGetPosition
-    lh' <- putHoleWord16LE
-    fillOffsetHole (pos+2) nh
+    lh' <- putOffsetHole
+    fillOffsetHole nh
     putWord16BE 0x3F49
-    nh' <- putHoleWord16LE
+    nh' <- putOffsetHole
     mapM_ putInstr body
-    return (H (pos+4) nh', H pos lh')
+    return (nh', lh')
   put $ BranchState nh' (lh':lhs)
 
 
 putIf :: (Expr, [Instruction]) -> Packing OffsetHole
 putIf (cond, body) = do
   putWord16BE 0x0147
-  pos <- packGetPosition
-  offsetHole <- putHoleWord16LE
+  offsetHole <- putOffsetHole
   putExpr cond
   mapM_ putInstr body
-  return $ H pos offsetHole
+  return offsetHole
 
 putElseIfs :: [(Expr, [Instruction])] -> StateT BranchState Packing ()
 putElseIfs = mapM_ putElseIf
@@ -145,14 +146,13 @@ putElseIfs = mapM_ putElseIf
       BranchState nh _ <- get
       (nh',lh') <- lift $ do
         putWord8 0x01
-        pos <- packGetPosition
-        fillOffsetHole pos nh
+        fillOffsetHole nh
         putWord8 0x27
-        nh' <- putHoleWord16LE
-        lh' <- putHoleWord16LE
+        nh' <- putOffsetHole
+        lh' <- putOffsetHole
         putExpr cond
         mapM_ putInstr body
-        return (H (pos+1) nh', H (pos+3) lh')
+        return (nh', lh')
 
       modify $ updateHoles nh' lh'
 
@@ -161,12 +161,11 @@ putElse body = do
   BranchState nh lastHoles <- get
   h' <- lift $ do
     putWord8 0x01
-    pos <- packGetPosition
-    fillOffsetHole pos nh
+    fillOffsetHole nh
     putWord8 0x48
-    nextHole <- putHoleWord16LE
+    nextHole <- putOffsetHole
     mapM_ putInstr body
-    return (H (pos+1) nextHole)
+    return nextHole
 
   put (BranchState h' lastHoles)
 
@@ -213,13 +212,12 @@ putLit (LitDict d) = putLitDict d
 putLit (LitArray a) = putLitArray a
 putLit (LitStruct s) = do
   putWord8 0x4A
-  len <- putHoleWord16LE
+  len <- putOffsetHole
   padPos <- packGetPosition
   padTo4 padPos
   start <- packGetPosition
-  putStruct s
-  pos <- packGetPosition
-  fillHole len (fromIntegral $ pos - start)
+  runReaderT (putStruct s) start
+  fillOffsetHole len
 putLit LitPassthrough = putWord8 0x2C
 
 padTo4 :: Int -> Packing ()
@@ -315,16 +313,16 @@ putInfix op e1 e2 = do
   putWord8 op
   putExpr e2
 
-putStruct :: Struct -> Packing ()
+-- TODO: move struct inside the ReaderT so that nested structs don't
+--       reset the position
+putStruct :: Struct -> ReaderT Int Packing ()
 putStruct (Struct items) = do
-  start <- packGetPosition
-  putWord32BE 0x00010000
-  firstEntry <- putHoleWord32BE
-  lastHole <- flip runReaderT start
-            . flip execStateT firstEntry
-            . mapM_ putStructItem
-            $ items
-  fillHole lastHole 0
+  lift $ putWord32BE 0x00010000
+  firstEntry <- lift putHoleWord32BE
+  lastHole   <- flip execStateT firstEntry
+              . mapM_ putStructItem
+              $ items
+  lift $ fillHole lastHole 0
 
 putStructItem :: StructItem -> StateT (Hole Word32) (ReaderT Int Packing) ()
 putStructItem (StructItem ty key value) = do
@@ -341,8 +339,8 @@ putStructItem (StructItem ty key value) = do
     case vh of
       Nothing -> pure ()
       Just h -> fillHole h (fromIntegral $ pos' - startPos)
-    putQbValueData value
     return nh
+  lift $ putQbValueData value
   put hole
   return ()
 
@@ -378,12 +376,64 @@ putQbValue (QbKeyRef k)        = putQbKey k >> pure Nothing
 putQbValue (QbStringPointer k) = putQbKey k >> pure Nothing
 putQbValue (QbStringQs k)      = putQbKey k >> pure Nothing
 
-putQbValueData :: QbValue -> Packing ()
-putQbValueData (QbString s) = mapM_ (putWord8 . fromIntegral . fromEnum) s
-putQbValueData (QbWString s) = mapM_ (putWord16BE . fromIntegral . fromEnum) s
-putQbValueData (QbVector2 x y) = putFloat32BE x >> putFloat32BE y
-putQbValueData (QbVector3 x y z) = putFloat32BE x >> putFloat32BE y >> putFloat32BE z
+putQbValueData :: QbValue -> ReaderT Int Packing ()
+putQbValueData (QbString s) = lift $ do
+  mapM_ (putWord8 . fromIntegral . fromEnum) s
+  putWord8 0x00
+putQbValueData (QbWString s) = lift $ do
+  mapM_ (putWord16BE . fromIntegral . fromEnum) s
+  putWord16BE 0x0000
+putQbValueData (QbVector2 x y) = lift $ putFloat32BE x >> putFloat32BE y
+putQbValueData (QbVector3 x y z) = lift $ putFloat32BE x >> putFloat32BE y >> putFloat32BE z
 putQbValueData (QbStruct s) = putStruct s
-putQbValueData (QbArray a) = error "TODO"
+putQbValueData (QbArray a) = putQbArray a
 putQbValueData _           = pure ()
 
+putQbArray :: QbArray -> ReaderT Int Packing ()
+putQbArray (QbArr t []) = lift $ do
+  putQbArrayType t
+  putWord32BE 0 -- array length
+putQbArray (QbArr t [x]) = do
+  start <- ask
+  lift $ do
+    putQbArrayType t
+    putWord32BE 1 -- array length
+    vh <- putQbValue x
+    case vh of
+      Nothing -> pure ()
+      Just h -> do
+        pos <- packGetPosition
+        fillHole h (fromIntegral $ pos - start)
+  putQbValueData x
+putQbArray (QbArr t xs) = do
+  start <- ask
+  lift $ do
+    putQbArrayType t
+    putWord32BE (fromIntegral $ length xs)
+    pos <- packGetPosition
+    putWord32BE (fromIntegral $ pos - start)
+
+  holes <- lift $ mapM putQbValue xs
+  zipWithM_ putQbArrayData xs holes
+
+putQbArrayType :: QbType -> Packing ()
+putQbArrayType QbTInteger       = putWord32BE 0x00010100
+putQbArrayType QbTFloat         = putWord32BE 0x00010200
+putQbArrayType QbTString        = putWord32BE 0x00010300
+putQbArrayType QbTWString       = putWord32BE 0x00010400
+putQbArrayType QbTVector2       = putWord32BE 0x00010500
+putQbArrayType QbTVector3       = putWord32BE 0x00010600
+putQbArrayType QbTStruct        = putWord32BE 0x00010A00
+putQbArrayType QbTArray         = putWord32BE 0x00010C00
+putQbArrayType QbTKey           = putWord32BE 0x00010D00
+putQbArrayType QbTKeyRef        = putWord32BE 0x00011A00
+putQbArrayType QbTStringPointer = putWord32BE 0x00011B00
+putQbArrayType QbTStringQs      = putWord32BE 0x00011C00
+
+putQbArrayData :: QbValue -> Maybe (Hole Word32) -> ReaderT Int Packing ()
+putQbArrayData v Nothing = putQbValueData v
+putQbArrayData v (Just h) = do
+  start <- ask
+  pos <- lift packGetPosition
+  lift $ fillHole h (fromIntegral $ pos - start)
+  putQbValueData v
