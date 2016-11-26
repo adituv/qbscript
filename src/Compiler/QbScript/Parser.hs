@@ -12,7 +12,7 @@ import           Data.Word(Word32)
 import           Text.Megaparsec hiding(newline)
 import           Text.Megaparsec.Expr
 import qualified Text.Megaparsec.Lexer as L
-import           Text.Megaparsec.Text(Parser)
+import           Text.Megaparsec.Text.Lazy(Parser)
 
 -- * Lexer
 
