@@ -15,6 +15,7 @@ data Instruction = BareExpr Expr
                  | Repeat Expr [Instruction]                        -- ^ Repeat xExpr [Body]
                  | Switch Expr [(SmallLit, [Instruction])] [Instruction] -- ^ Switch Expr [(Case, Body)] [DefaultBody]
                  | Break
+                 | Return (Maybe QbKey, Expr)
                  deriving (Show, Eq)
 
 data Ty = TInt
@@ -103,6 +104,7 @@ compressNegs (Switch x cases defaults) = Switch (negLit x)
                                             (fmap (second (fmap compressNegs)) cases)
                                             (fmap compressNegs defaults)
 compressNegs Break = Break
+compressNegs (Return (k, x)) = Return (k, negLit x)
 
 negLit :: Expr -> Expr
 negLit (Paren x) = Paren (negLit x)

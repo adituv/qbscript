@@ -248,6 +248,7 @@ instruction = choice (fmap try
   , repeat
   , switch
   , Break <$ rword "break"
+  , Return <$> (rword "return" *> (parens argument <|> argument))
   , BareExpr <$> expr
   ]) <* lineTerm
 

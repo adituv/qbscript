@@ -61,6 +61,12 @@ putInstr (Repeat expr body) = do
   putExpr expr
 putInstr (Switch expr cases default') = putSwitch expr cases default'
 putInstr Break = putWord16BE 0x0122
+putInstr (Return (Nothing, x)) = putWord16BE 0x0129 >> putExpr x
+putInstr (Return (Just k, x)) = do
+  putWord16BE 0x0129
+  putLitKey k
+  putWord8 0x07
+  putExpr x
 
 putSwitch :: Expr -> [(SmallLit, [Instruction])] -> [Instruction] -> Packing ()
 putSwitch expr cases default' = do
