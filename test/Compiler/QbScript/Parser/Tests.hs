@@ -20,6 +20,7 @@ runTests = do
   identTests
   litTests
   instructionTests
+  termTests
   expressionTests
   qbScriptTests
 
@@ -151,11 +152,80 @@ instructionTests =
       parse instruction "" "doSomething()"
         `shouldParse` BareExpr (BareCall (QbName "doSomething") [])
 
+termTests :: Spec
+termTests =
+  describe "term" $ do
+    it "can parse an expression in parentheses" $
+      parse term "" "(1.0+2.0)" `shouldParse` Paren (Add (ELit (LitF 1)) (ELit (LitF 2)))
+    it "can parse a method call with no arguments" $
+      parse term "" "a:test()" `shouldParse` MethodCall (NonLocal (QbName "a")) (QbName "test") []
+    it "can parse a method call with a value argument" $
+      parse term "" "a:test(b)" `shouldParse` MethodCall (NonLocal (QbName "a")) (QbName "test") [(Nothing, eLitKey "b")]
+    it "can parse a method call with a keyword argument" $
+      parse term "" "a:test(b=c)" `shouldParse` MethodCall (NonLocal (QbName "a")) (QbName "test") [(Just $ QbName "b", eLitKey "c")]
+    it "can parse a method call with multiple arguments" $
+      parse term "" "a:test(b,c=2.0,3.0)" `shouldParse`
+        MethodCall (NonLocal (QbName "a")) (QbName "test")
+          [ (Nothing, eLitKey "b")
+          , (Just $ QbName "c", ELit . LitF $ 2)
+          , (Nothing, ELit . LitF $ 3)
+          ]
+    it "can parse a function call with no arguments" $
+      parse term "" "test()" `shouldParse` BareCall (QbName "test") []
+    it "can parse a function call with a value argument" $
+      parse term "" "test(b)" `shouldParse` BareCall (QbName "test")
+        [(Nothing, eLitKey "b")]
+    it "can parse a function call with a keyword argument" $
+      parse term "" "test(b=c)" `shouldParse` BareCall (QbName "test")
+        [(Just $ QbName "b", eLitKey "c")]
+    it "can parse a function call with multiple arguments" $
+      parse term "" "test(b,c=2.0,3.0)" `shouldParse`
+        BareCall (QbName "test")
+          [ (Nothing, eLitKey "b")
+          , (Just $ QbName "c", ELit . LitF $ 2)
+          , (Nothing, ELit . LitF $ 3)
+          ]
+    it "can parse a literal on its own" $
+      parse term "" "[ 1 ]" `shouldParse` (ELit . LitArray . Array $ [ELit . SmallLit . LitN $ 1])
+
 expressionTests :: Spec
 expressionTests =
   describe "expr" $ do
-    -- TODO
-    return ()
+    it "can parse a bare term" $
+      parse expr "" "test(b)" `shouldParse` BareCall (QbName "test")
+        [(Nothing, eLitKey "b")]
+    it "can parse any single operator expression" $ do
+      parse expr "" "*a" `shouldParse` Deref (eLitKey "a")
+      parse expr "" "a.b" `shouldParse` Member (eLitKey "a") (QbName "b")
+      parse expr "" "a[b]" `shouldParse` Index (eLitKey "a") (eLitKey "b")
+      parse expr "" "!a" `shouldParse` Not (eLitKey "a")
+      parse expr "" "-a" `shouldParse` Neg (eLitKey "a")
+      parse expr "" "a*b" `shouldParse` Mul (eLitKey "a") (eLitKey "b")
+      parse expr "" "a/b" `shouldParse` Div (eLitKey "a") (eLitKey "b")
+      parse expr "" "a+b" `shouldParse` Add (eLitKey "a") (eLitKey "b")
+      parse expr "" "a-b" `shouldParse` Sub (eLitKey "a") (eLitKey "b")
+      parse expr "" "a<b" `shouldParse` Lt (eLitKey "a") (eLitKey "b")
+      parse expr "" "a>b" `shouldParse` Gt (eLitKey "a") (eLitKey "b")
+      parse expr "" "a<=b" `shouldParse` Lte (eLitKey "a") (eLitKey "b")
+      parse expr "" "a>=b" `shouldParse` Gte (eLitKey "a") (eLitKey "b")
+      parse expr "" "a==b" `shouldParse` Eq (eLitKey "a") (eLitKey "b")
+      parse expr "" "a!=b" `shouldParse` Neq (eLitKey "a") (eLitKey "b")
+      parse expr "" "a^b" `shouldParse` Xor (eLitKey "a") (eLitKey "b")
+      parse expr "" "a&&b" `shouldParse` And (eLitKey "a") (eLitKey "b")
+      parse expr "" "a||b" `shouldParse` Or (eLitKey "a") (eLitKey "b")
+    it "handles precedence of combinations of operators correctly" $ do
+      parse expr "" "*a.b" `shouldParse` Member (Deref $ eLitKey "a") (QbName "b")
+      parse expr "" "!a&&b" `shouldParse` And (Not $ eLitKey "a") (eLitKey "b")
+      parse expr "" "-3*4" `shouldParse` Mul (Neg . ELit . SmallLit . LitN $ 3)
+                                             (ELit . SmallLit . LitN $ 4)
+      parse expr "" "a*b+c" `shouldParse` Add (Mul (eLitKey "a") (eLitKey "b")) (eLitKey "c")
+      parse expr "" "a*b < c" `shouldParse` Lt (Mul (eLitKey "a") (eLitKey "b")) (eLitKey "c")
+      parse expr "" "a<b == b<c" `shouldParse` Eq (Lt (eLitKey "a") (eLitKey "b"))
+                                                  (Lt (eLitKey "b") (eLitKey "c"))
+      parse expr "" "a&&b||c" `shouldParse` Or (And (eLitKey "a") (eLitKey "b")) (eLitKey "c")
+
+eLitKey :: String -> Expr
+eLitKey = ELit . SmallLit . LitKey . NonLocal . QbName
 
 qbScriptTests :: Spec
 qbScriptTests =
