@@ -9,8 +9,11 @@ import Data.ByteString(ByteString)
 import Data.Packer
 import Data.Word
 
+packingBufferSize :: Int
+packingBufferSize = 4096
+
 genScriptCode :: QbScript -> ByteString
-genScriptCode = runPacking 4096 . putScript
+genScriptCode = runPacking packingBufferSize . putScript
 
 putScript :: QbScript -> Packing ()
 putScript (QbScript args instrs) = do
@@ -67,8 +70,9 @@ putInstr (Repeat expr body) = do
   putExpr expr
 putInstr (Switch expr cases default') = putSwitch expr cases default'
 putInstr Break = putWord16BE 0x0122
-putInstr (Return (Nothing, x)) = putWord16BE 0x0129 >> putExpr x
-putInstr (Return (Just k, x)) = do
+putInstr (Return Nothing) = putWord16BE 0x0129
+putInstr (Return (Just (Nothing, x))) = putWord16BE 0x0129 >> putExpr x
+putInstr (Return (Just (Just k, x))) = do
   putWord16BE 0x0129
   putLitKey k
   putWord8 0x07

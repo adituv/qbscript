@@ -141,12 +141,14 @@ instructionTests =
                [BareExpr $ BareCall (QbName "doNothing") []]
     it "can parse a break" $
       parse instruction "" "break" `shouldParse` Break
+    it "can parse a no-value return" $
+      parse instruction "" "return" `shouldParse` Return Nothing
     it "can parse a non-keyword return" $
-      parse instruction "" "return 3" `shouldParse` Return (Nothing, ELit (SmallLit (LitN 3)))
+      parse instruction "" "return 3" `shouldParse` Return (Just (Nothing, ELit (SmallLit (LitN 3))))
     it "can parse a keyword return" $
-      parse instruction "" "return (x=2.0)" `shouldParse` Return (Just $ QbName "x", ELit (LitF 2))
+      parse instruction "" "return (x=2.0)" `shouldParse` Return (Just (Just $ QbName "x", ELit (LitF 2)))
     it "can parse a keyword return by crc" $
-      parse instruction "" "return ($1234abcd=2.0)" `shouldParse` Return (Just $ QbCrc 0x1234abcd, ELit (LitF 2))
+      parse instruction "" "return ($1234abcd=2.0)" `shouldParse` Return (Just (Just $ QbCrc 0x1234abcd, ELit (LitF 2)))
     it "can parse a bare call expression" $
       parse instruction "" "doSomething()"
         `shouldParse` BareExpr (BareCall (QbName "doSomething") [])
@@ -160,5 +162,7 @@ expressionTests =
 qbScriptTests :: Spec
 qbScriptTests =
   describe "qbScript" $ do
-    -- TODO
+    it "should parse an empty script" $
+      parse qbScript "" "script()\nendscript" `shouldParse` QbScript Nothing []
+    -- TODO: sample scripts
     return ()
