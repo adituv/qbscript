@@ -9,8 +9,11 @@ import Data.ByteString(ByteString)
 import Data.Packer
 import Data.Word
 
+packingBufferSize :: Int
+packingBufferSize = 4096
+
 genScriptCode :: QbScript -> ByteString
-genScriptCode = runPacking 4096 . putScript
+genScriptCode = runPacking packingBufferSize . putScript
 
 putScript :: QbScript -> Packing ()
 putScript (QbScript args instrs) = do
@@ -67,8 +70,9 @@ putInstr (Repeat expr body) = do
   putExpr expr
 putInstr (Switch expr cases default') = putSwitch expr cases default'
 putInstr Break = putWord16BE 0x0122
-putInstr (Return (Nothing, x)) = putWord16BE 0x0129 >> putExpr x
-putInstr (Return (Just k, x)) = do
+putInstr (Return Nothing) = putWord16BE 0x0129
+putInstr (Return (Just (Nothing, x))) = putWord16BE 0x0129 >> putExpr x
+putInstr (Return (Just (Just k, x))) = do
   putWord16BE 0x0129
   putLitKey k
   putWord8 0x07
@@ -212,12 +216,13 @@ putLit (LitDict d) = putLitDict d
 putLit (LitArray a) = putLitArray a
 putLit (LitStruct s) = do
   putWord8 0x4A
-  len <- putOffsetHole
+  len <- putHoleWord16LE
   padPos <- packGetPosition
   padTo4 padPos
   start <- packGetPosition
   runReaderT (putStruct s) start
-  fillOffsetHole len
+  pos <- packGetPosition
+  fillHole len (fromIntegral $ pos - start)
 putLit LitPassthrough = putWord8 0x2C
 
 padTo4 :: Int -> Packing ()
@@ -254,9 +259,11 @@ putDictEntry (k, expr) = do
   putExpr expr
 
 putLitArray :: Array -> Packing ()
-putLitArray (Array entries) = do
+putLitArray (Array []) = putWord16BE 0x0506
+putLitArray (Array (x:xs)) = do
   putWord8 0x05
-  mapM_ putExpr entries
+  putExpr x
+  mapM_ (\e -> putWord8 0x09 >> putExpr e) xs
   putWord8 0x06
 
 putExpr :: Expr -> Packing ()
