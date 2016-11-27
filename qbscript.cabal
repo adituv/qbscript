@@ -51,6 +51,7 @@ test-suite qbscript-test
                      , hspec
                      , hspec-megaparsec
                      , megaparsec
+                     , mtl
                      , packer
                      , qbscript
                      , QuickCheck

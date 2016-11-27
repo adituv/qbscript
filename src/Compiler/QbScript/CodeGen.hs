@@ -217,20 +217,23 @@ putLit (LitArray a) = putLitArray a
 putLit (LitStruct s) = do
   putWord8 0x4A
   len <- putHoleWord16LE
-  padPos <- packGetPosition
-  padTo4 padPos
+  padTo4
   start <- packGetPosition
   runReaderT (putStruct s) start
   pos <- packGetPosition
   fillHole len (fromIntegral $ pos - start)
 putLit LitPassthrough = putWord8 0x2C
 
-padTo4 :: Int -> Packing ()
-padTo4 0 = pure ()
-padTo4 1 = putWord8 0 >> padTo4 2
-padTo4 2 = putWord8 0 >> padTo4 3
-padTo4 3 = putWord8 0
-padTo4 x = padTo4 (x `mod` 4)
+padTo4 :: Packing ()
+padTo4 = do
+    pos <- packGetPosition
+    padTo4' pos
+  where
+    padTo4' 0 = pure ()
+    padTo4' 1 = putWord8 0 >> padTo4' 2
+    padTo4' 2 = putWord8 0 >> padTo4' 3
+    padTo4' 3 = putWord8 0
+    padTo4' x = padTo4' (x `mod` 4)
 
 putName :: Name -> Packing ()
 putName (Local k) = putWord8 0x2D >> putLitKey k
@@ -336,6 +339,7 @@ putStructItem (StructItem ty key value) = do
   prevHole <- get
   startPos <- ask
   hole <- lift . lift $ do
+    padTo4
     pos <- packGetPosition
     fillHole prevHole (fromIntegral $ pos - startPos)
     putQbType ty
