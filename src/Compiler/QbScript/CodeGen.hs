@@ -216,12 +216,13 @@ putLit (LitDict d) = putLitDict d
 putLit (LitArray a) = putLitArray a
 putLit (LitStruct s) = do
   putWord8 0x4A
-  len <- putOffsetHole
+  len <- putHoleWord16LE
   padPos <- packGetPosition
   padTo4 padPos
   start <- packGetPosition
   runReaderT (putStruct s) start
-  fillOffsetHole len
+  pos <- packGetPosition
+  fillHole len (fromIntegral $ pos - start)
 putLit LitPassthrough = putWord8 0x2C
 
 padTo4 :: Int -> Packing ()
@@ -258,9 +259,11 @@ putDictEntry (k, expr) = do
   putExpr expr
 
 putLitArray :: Array -> Packing ()
-putLitArray (Array entries) = do
+putLitArray (Array []) = putWord16BE 0x0506
+putLitArray (Array (x:xs)) = do
   putWord8 0x05
-  mapM_ putExpr entries
+  putExpr x
+  mapM_ (\e -> putWord8 0x09 >> putExpr e) xs
   putWord8 0x06
 
 putExpr :: Expr -> Packing ()

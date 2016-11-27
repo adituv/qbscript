@@ -293,18 +293,16 @@ term = choice (fmap try
   [ Paren <$> parens expr
   , MethodCall <$> (name <* colon) <*> qbKey <*> parens (try argument `sepBy` comma)
   , BareCall <$> qbKey <*> parens (try argument `sepBy` comma)
-  , Member <$> (try (parens expr) <|> ELit . SmallLit . LitKey <$> name)
-           <*> (op "." *> qbKey)
-  , Index <$> (try (parens expr) <|> ELit . SmallLit . LitKey <$> name)
-          <*> between (symbol "[") (symbol "]") expr
   , ELit <$> lit
   ]) <?> "term"
 
 argument :: Parser (Maybe QbKey, Expr)
-argument = (,) <$> optional (qbKey <* op "=") <*> expr
+argument = (,) <$> optional (try $ qbKey <* op "=") <*> expr
 
 opTable :: [[Operator Parser Expr]]
-opTable = [ [ prefix "!" Not, prefix "-" Neg, prefix "*" Deref ]
+opTable = [ [ prefix "*" Deref ]
+          , [ member, index ]
+          , [ prefix "!" Not, prefix "-" Neg ]
           , [ binary "*" Mul, binary "/" Div ]
           , [ binary "+" Add, binary "-" Sub ]
           , [ binary "<" Lt, binary ">" Gt, binary "<=" Lte, binary ">=" Gte ]
@@ -319,3 +317,9 @@ binary n f = InfixL (f <$ op n)
 
 prefix :: String -> (a -> a) -> Operator Parser a
 prefix n f = Prefix (f <$ op n)
+
+member :: Operator Parser Expr
+member = Postfix $ flip Member <$> (op "." *> qbKey)
+
+index :: Operator Parser Expr
+index = Postfix $ flip Index <$> (op "[" *> expr <* op "]")
