@@ -129,9 +129,37 @@ arrayTests =
 
 exprTests :: Spec
 exprTests =
-  describe "putExpr" $ do
-    -- TODO
-    return ()
+    describe "putExpr" $ do
+      it "generates simple expressions with minimal nesting correctly" $ do
+        testPacking (putExpr (Paren one)) `shouldBe` concat [[0x0E], putOne, [0x0F]]
+        testPacking (putExpr (Neg one)) `shouldBe` 0x0A:putOne
+        testPacking (putExpr (Not one)) `shouldBe` 0x39:putOne
+        testPacking (putExpr (And one one)) `shouldBe` concat [putOne, [0x33], putOne]
+        testPacking (putExpr (Or one one)) `shouldBe` concat [putOne, [0x32], putOne]
+        testPacking (putExpr (Xor one one)) `shouldBe` concat [putOne, [0x34], putOne]
+        testPacking (putExpr (Add one one)) `shouldBe` concat [putOne, [0x0B], putOne]
+        testPacking (putExpr (Sub one one)) `shouldBe` concat [putOne, [0x0A], putOne]
+        testPacking (putExpr (Mul one one)) `shouldBe` concat [putOne, [0x0C], putOne]
+        testPacking (putExpr (Div one one)) `shouldBe` concat [putOne, [0x0D], putOne]
+        testPacking (putExpr (Lt one one)) `shouldBe` concat [putOne, [0x12], putOne]
+        testPacking (putExpr (Lte one one)) `shouldBe` concat [putOne, [0x13], putOne]
+        testPacking (putExpr (Eq one one)) `shouldBe` concat [putOne, [0x07], putOne]
+        testPacking (putExpr (Gt one one)) `shouldBe` concat [putOne, [0x14], putOne]
+        testPacking (putExpr (Gte one one)) `shouldBe` concat [putOne, [0x15], putOne]
+        testPacking (putExpr (Neq one one)) `shouldBe` concat [putOne, [0x4D], putOne]
+        testPacking (putExpr (Deref one)) `shouldBe` 0x4B:putOne
+        testPacking (putExpr (Index one one)) `shouldBe` concat [putOne, [0x05], putOne, [0x06]]
+        testPacking (putExpr (Member one x)) `shouldBe` concat [putOne, [0x08], putX]
+        testPacking (putExpr (BareCall x [(Nothing, one)])) `shouldBe` putX ++ putOne
+        testPacking (putExpr (MethodCall (NonLocal x) x [(Nothing, one)])) `shouldBe`
+          concat [putX, [0x42], putX, putOne]
+      -- TODO: test more complicated expressions
+      return ()
+  where
+    one = ELit (LitF 1)
+    putOne = [ 0x1A, 0x00, 0x00, 0x80, 0x3F ]
+    x = QbName "x"
+    putX = [ 0x16, 0x7C, 0xE9, 0x23, 0x73 ]
 
 testPackStruct :: Struct -> [Word8]
 testPackStruct s = testPacking (runReaderT (putStruct s) 0)
