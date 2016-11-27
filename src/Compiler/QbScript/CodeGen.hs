@@ -422,7 +422,7 @@ putQbArray (QbArr t xs) = do
     putQbArrayType t
     putWord32BE (fromIntegral $ length xs)
     pos <- packGetPosition
-    putWord32BE (fromIntegral $ pos - start)
+    putWord32BE (fromIntegral $ pos - start + 4)
 
   holes <- lift $ mapM putQbValue xs
   zipWithM_ putQbArrayData xs holes
