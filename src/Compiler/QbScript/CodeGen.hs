@@ -394,8 +394,8 @@ putQbValueData (QbString s) = lift $ do
 putQbValueData (QbWString s) = lift $ do
   mapM_ (putWord16BE . fromIntegral . fromEnum) s
   putWord16BE 0x0000
-putQbValueData (QbVector2 x y) = lift $ putFloat32BE x >> putFloat32BE y
-putQbValueData (QbVector3 x y z) = lift $ putFloat32BE x >> putFloat32BE y >> putFloat32BE z
+putQbValueData (QbVector2 x y) = lift $ putWord32BE 0x00010000 >> putFloat32BE x >> putFloat32BE y
+putQbValueData (QbVector3 x y z) = lift $ putWord32BE 0x00010000 >> putFloat32BE x >> putFloat32BE y >> putFloat32BE z
 putQbValueData (QbStruct s) = putStruct s
 putQbValueData (QbArray a) = putQbArray a
 putQbValueData _           = pure ()
