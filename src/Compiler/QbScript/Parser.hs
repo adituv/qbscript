@@ -163,15 +163,17 @@ qbKey =  QbCrc <$> checksum
 
 dict :: Parser Dict
 dict = braces $ optional newline *>
-            (ExtendsPT <$> (passthrough *> comma *> optional newline *> dict')
-         <|> Dict <$> dict')
+         (Dict <$> dict')
   where
-    dict' :: Parser [(QbKey, Expr)]
+    dict' :: Parser [(Maybe QbKey, Expr)]
     dict' = entry `sepBy` (comma <* optional newline)
          <*  optional newline
 
-    entry :: Parser (QbKey, Expr)
-    entry = (,) <$> qbKey <*> (colon *> expr)
+    entry :: Parser (Maybe QbKey, Expr)
+    entry = do
+      k <- optional (try $ qbKey <* colon)
+      v <- expr
+      return (k,v)
 
 array :: Parser Array
 array = Array <$> brackets (optional newline *> expr `sepBy` (comma <* optional newline)
@@ -194,18 +196,18 @@ structItem = do
 
 qbType :: Parser QbType
 qbType = choice (fmap try
-           [ QbTInteger <$ symbol "int"
-           , QbTFloat <$ symbol "float"
-           , QbTString <$ symbol "string"
-           , QbTWString <$ symbol "wstring"
-           , QbTVector2 <$ symbol "vector2"
-           , QbTVector3 <$ symbol "vector3"
-           , QbTStruct <$ symbol "struct"
-           , QbTArray <$ symbol "array"
-           , QbTKey <$ symbol "qbkey"
-           , QbTKeyRef <$ symbol "qbkeyref"
-           , QbTStringPointer <$ symbol "stringptr"
-           , QbTStringQs <$ symbol "stringqs"
+           [ QbTInteger <$ rword "int"
+           , QbTFloat <$ rword "float"
+           , QbTString <$ rword "string"
+           , QbTWString <$ rword "wstring"
+           , QbTVector2 <$ rword "vector2"
+           , QbTVector3 <$ rword "vector3"
+           , QbTStruct <$ rword "struct"
+           , QbTArray <$ rword "array"
+           , QbTKey <$ rword "qbkey"
+           , QbTKeyRef <$ rword "qbkeyref"
+           , QbTStringPointer <$ rword "stringptr"
+           , QbTStringQs <$ rword "stringqs"
            ]) <?> "struct item type"
 
 

@@ -244,18 +244,16 @@ putLitKey q@(QbName _) = putLitKey (canonicalise q)
 putLitKey (QbCrc x) = putWord8 0x16 >> putWord32LE x
 
 putLitDict :: Dict -> Packing ()
-putLitDict (ExtendsPT entries) = do
-  putWord8 0x03
-  putWord16BE 0x012C
-  mapM_ putDictEntry entries
-  putWord16BE 0x0104
 putLitDict (Dict entries) = do
   putWord8 0x03
   mapM_ putDictEntry entries
   putWord16BE 0x0104
 
-putDictEntry :: (QbKey, Expr) -> Packing ()
-putDictEntry (k, expr) = do
+putDictEntry :: (Maybe QbKey, Expr) -> Packing ()
+putDictEntry (Nothing, expr) = do
+  putWord8 0x01
+  putExpr expr
+putDictEntry (Just k, expr) = do
   putWord8 0x01
   putLitKey k
   putWord8 0x07

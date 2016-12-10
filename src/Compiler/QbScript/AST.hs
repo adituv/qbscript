@@ -53,8 +53,7 @@ data Name = Local QbKey
           | NonLocal QbKey
           deriving (Show, Eq)
 
-data Dict = ExtendsPT [(QbKey, Expr)]
-          | Dict [(QbKey, Expr)]
+data Dict = Dict [(Maybe QbKey, Expr)]
           deriving (Show, Eq)
 
 data Array = Array [Expr]

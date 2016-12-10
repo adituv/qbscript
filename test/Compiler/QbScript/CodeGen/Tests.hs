@@ -102,16 +102,10 @@ litTests =
 dictTests :: Spec
 dictTests =
   describe "putLitDict" $ do
-    it "generates an empty passthrough extension correctly" $
-      testPacking (putLitDict (ExtendsPT [])) `shouldBe`
-        [ 0x03, 0x01, 0x2C, 0x01, 0x04 ]
     it "generates an empty dict correctly" $
       testPacking (putLitDict (Dict [])) `shouldBe` [ 0x03, 0x01, 0x04 ]
-    it "generates a passthrough extension correctly" $
-      testPacking (putLitDict (ExtendsPT [(QbName "x", ELit LitPassthrough)]))
-        `shouldBe` [ 0x03, 0x01, 0x2C, 0x01, 0x16, 0x7C, 0xE9, 0x23, 0x73, 0x07, 0x2C, 0x01, 0x04 ]
-    it "generates a dict correctly"  $
-      testPacking (putLitDict (Dict [(QbName "x", ELit LitPassthrough)]))
+    it "generates a dict with a single kv-item correctly"  $
+      testPacking (putLitDict (Dict [(Just $ QbName "x", ELit LitPassthrough)]))
         `shouldBe` [ 0x03, 0x01, 0x16, 0x7C, 0xE9, 0x23, 0x73, 0x07, 0x2C, 0x01, 0x04 ]
 
 arrayTests :: Spec

@@ -22,6 +22,7 @@ runTests = do
   instructionTests
   termTests
   expressionTests
+  structTests
   qbScriptTests
 
 rwordTests :: Spec
@@ -82,13 +83,18 @@ litTests =
     it "can parse a passthrough" $
       parse lit "" "<...>" `shouldParse` LitPassthrough
     -- TODO: maybe quickcheck these?
-    it "can parse a passthrough-extended dictionary" $
-      parse lit "" "{ <...>,\n test: 1.0,\n $12345678: <...> }"
-        `shouldParse` (LitDict . ExtendsPT)
-           [(QbName "test", ELit (LitF 1)), (QbCrc 0x12345678, ELit LitPassthrough)]
-    it "can parse an unextended dictionary" $
-      parse lit "" "{\n asdf: 1.0,\n $deadbeef : 2.0\n }" `shouldParse` (LitDict . Dict)
-        [(QbName "asdf", ELit (LitF 1)), (QbCrc 0xdeadbeef, ELit (LitF 2))]
+    it "can parse a dictionary with a single kv member" $
+      parse lit "" "{ $deadbeef: x }" `shouldParse`
+        LitDict (Dict [(Just $ QbCrc 0xDEADBEEF, eLitKey "x")])
+    it "can parse a dictionary with a single value member" $
+      parse lit "" "{ <...> }" `shouldParse` LitDict (Dict [(Nothing, ELit LitPassthrough)])
+    it "can parse a dictionary with a mixture of kv and value members" $
+      parse lit "" "{ <...>, rgba: [ 255, 255, 255, 128 ], shadow }" `shouldParse`
+        LitDict (Dict [(Nothing, ELit LitPassthrough)
+                      ,(Just $ QbName "rgba", ELit . LitArray . Array $
+                          [ELit . SmallLit . LitN $ 255, ELit . SmallLit . LitN $ 255
+                          ,ELit . SmallLit . LitN $ 255, ELit . SmallLit . LitN $ 128])
+                      ,(Nothing, eLitKey "shadow")])
     it "can parse an array of float" $ property $
       \xs -> parse lit "" (fromString $ show (fmap getNonNegative xs :: [Float]))
                `shouldParse` (LitArray . Array . fmap (ELit . LitF)) (fmap getNonNegative xs)
@@ -228,6 +234,16 @@ expressionTests =
 
 eLitKey :: String -> Expr
 eLitKey = ELit . SmallLit . LitKey . NonLocal . QbName
+
+structTests :: Spec
+structTests =
+  describe "struct" $ do
+    it "should parse a 1-item struct" $ do
+      parse struct "" "{\n\tqbkey x = $00000000;\n}" `shouldParse`
+        Struct [StructItem QbTKey (QbName "x") (QbKey $ QbCrc 0)]
+      parse struct "" "{\n\tqbkeyref x = $00000000;\n}" `shouldParse`
+        Struct [StructItem QbTKeyRef (QbName "x") (QbKeyRef $ QbCrc 0)]
+    return ()
 
 qbScriptTests :: Spec
 qbScriptTests =
