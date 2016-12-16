@@ -243,7 +243,36 @@ structTests =
         Struct [StructItem QbTKey (QbName "x") (QbKey $ QbCrc 0)]
       parse struct "" "{\n\tqbkeyref x = $00000000;\n}" `shouldParse`
         Struct [StructItem QbTKeyRef (QbName "x") (QbKeyRef $ QbCrc 0)]
-    return ()
+    it "can parse arrays of all types" $ do
+      parse struct "" "{\n\tarray<int> _ = [1,2,3];\n}" `shouldParse`
+        Struct [StructItem (QbTArray QbTInteger) (QbCrc 0) (QbArray . QbArr QbTInteger
+                                              $ [QbInteger 1, QbInteger 2, QbInteger 3])]
+      parse struct "" "{\n\tarray<float> _ = [1.0, 2.0, 3.0];\n}" `shouldParse`
+        Struct [StructItem (QbTArray QbTFloat) (QbCrc 0) (QbArray . QbArr QbTFloat
+                                              $ [QbFloat 1, QbFloat 2, QbFloat 3])]
+      parse struct "" "{\n\tarray<string> _ = ['a', 'b'];\n}" `shouldParse`
+        Struct [StructItem (QbTArray QbTString) (QbCrc 0) (QbArray . QbArr QbTString
+                                              $ [QbString "a", QbString "b"])]
+      parse struct "" "{\n\tarray<wstring> _ = [\"a\", \"b\"];\n}" `shouldParse`
+        Struct [StructItem (QbTArray QbTWString) (QbCrc 0) (QbArray . QbArr QbTWString
+                                              $ [QbWString "a", QbWString "b"])]
+      parse struct "" "{\n\tarray<array<int>> _ = [[1,2],[3,4]];\n}" `shouldParse`
+        Struct [StructItem (QbTArray (QbTArray QbTInteger)) (QbCrc 0)
+                  (QbArray . QbArr (QbTArray QbTInteger)
+                  $ [QbArray . QbArr QbTInteger $ [QbInteger 1, QbInteger 2]
+                    ,QbArray . QbArr QbTInteger $ [QbInteger 3, QbInteger 4]])]
+      parse struct "" "{\n\tarray<qbkey> _ = [x,y];\n}" `shouldParse`
+        Struct [StructItem (QbTArray QbTKey)(QbCrc 0) (QbArray . QbArr QbTKey
+                          $ [QbKey (QbName "x"), QbKey (QbName "y")])]
+      parse struct "" "{\n\tarray<qbkeyref> _ = [x,y];\n}" `shouldParse`
+        Struct [StructItem (QbTArray QbTKeyRef)(QbCrc 0) (QbArray . QbArr QbTKeyRef
+                          $ [QbKeyRef (QbName "x"), QbKeyRef (QbName "y")])]
+      parse struct "" "{\n\tarray<stringptr> _ = [x,y];\n}" `shouldParse`
+        Struct [StructItem (QbTArray QbTStringPointer)(QbCrc 0) (QbArray . QbArr QbTStringPointer
+                          $ [QbStringPointer (QbName "x"), QbStringPointer (QbName "y")])]
+      parse struct "" "{\n\tarray<stringqs> _ = [x,y];\n}" `shouldParse`
+        Struct [StructItem (QbTArray QbTStringQs)(QbCrc 0) (QbArray . QbArr QbTStringQs
+                          $ [QbStringQs (QbName "x"), QbStringQs (QbName "y")])]
 
 qbScriptTests :: Spec
 qbScriptTests =

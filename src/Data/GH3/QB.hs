@@ -16,7 +16,7 @@ data QbType = QbTInteger
             | QbTVector2
             | QbTVector3
             | QbTStruct
-            | QbTArray
+            | QbTArray QbType
             | QbTKey
             | QbTKeyRef -- ^ ?? From Nanook's Queen Bee source code
             | QbTStringPointer -- ^ ??

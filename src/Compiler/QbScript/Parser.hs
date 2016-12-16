@@ -66,6 +66,9 @@ braces = between (symbol "{") (symbol "}")
 brackets :: Parser a -> Parser a
 brackets = between (symbol "[") (symbol "]")
 
+angles :: Parser a -> Parser a
+angles = between (symbol "<") (symbol ">")
+
 newline :: Parser ()
 newline = void $ some (lexeme eol)
 
@@ -203,7 +206,7 @@ qbType = choice (fmap try
            , QbTVector2 <$ rword "vector2"
            , QbTVector3 <$ rword "vector3"
            , QbTStruct <$ rword "struct"
-           , QbTArray <$ rword "array"
+           , QbTArray <$> (rword "array" *> angles qbType) 
            , QbTKey <$ rword "qbkey"
            , QbTKeyRef <$ rword "qbkeyref"
            , QbTStringPointer <$ rword "stringptr"
@@ -216,24 +219,19 @@ qbValue QbTInteger = QbInteger . fromInteger <$> (try (char '0' *> char 'x') *> 
                                              <|> decimal)
 qbValue QbTFloat = QbFloat <$> float
 qbValue QbTString = QbString <$> narrowString
-qbValue QbTWString = QbString <$> wideString
+qbValue QbTWString = QbWString <$> wideString
 qbValue QbTVector2 = parens (QbVector2 <$> float <*> (comma *> float))
 qbValue QbTVector3 = parens (QbVector3 <$> float <*> (comma *> float) <*> (comma *> float))
 qbValue QbTStruct = QbStruct <$> struct
-qbValue QbTArray = QbArray <$> qbArray
+qbValue (QbTArray t) = QbArray <$> qbArray t
 qbValue QbTKey = QbKey <$> qbKey
 qbValue QbTKeyRef = QbKeyRef <$> qbKey
 qbValue QbTStringPointer = QbStringPointer <$> qbKey
 qbValue QbTStringQs = QbStringQs <$> qbKey
 
 
-qbArray :: Parser QbArray
-qbArray = brackets $ choice [ QbArr t <$> qbValue t `sepBy` (comma <* optional newline)
-                            | t <- qbTypes]
-  where
-    qbTypes :: [QbType]
-    qbTypes = [ QbTInteger, QbTFloat, QbTString, QbTWString, QbTVector2, QbTVector3, QbTStruct
-              , QbTArray, QbTKey, QbTKeyRef, QbTStringPointer, QbTStringQs]
+qbArray :: QbType -> Parser QbArray
+qbArray t = brackets $ QbArr t <$> qbValue t `sepBy` (comma <* optional newline)
 
 -- * Instructions
 
