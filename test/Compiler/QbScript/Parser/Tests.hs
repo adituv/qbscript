@@ -83,6 +83,8 @@ litTests =
     it "can parse a passthrough" $
       parse lit "" "<...>" `shouldParse` LitPassthrough
     -- TODO: maybe quickcheck these?
+    it "parses empty braces as a dictionary" $
+      parse lit "" "{ }" `shouldParse` LitDict (Dict [])
     it "can parse a dictionary with a single kv member" $
       parse lit "" "{ $deadbeef: x }" `shouldParse`
         LitDict (Dict [(Just $ QbCrc 0xDEADBEEF, eLitKey "x")])
