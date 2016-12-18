@@ -12,7 +12,7 @@ data QbScript = QbScript (Maybe Struct) [Instruction] deriving (Show, Eq)
 data Instruction = BareExpr Expr
                  | Assign Name Expr
                  | IfElse (Expr, [Instruction]) [(Expr, [Instruction])] [Instruction]     -- ^ IfElse [(Condition, Body)] [ElseBody]
-                 | Repeat Expr [Instruction]                        -- ^ Repeat xExpr [Body]
+                 | Repeat (Maybe Expr) [Instruction]                        -- ^ Repeat xExpr [Body]
                  | Switch Expr [(SmallLit, [Instruction])] [Instruction] -- ^ Switch Expr [(Case, Body)] [DefaultBody]
                  | Break
                  | Return (Maybe (Maybe QbKey, Expr))
@@ -98,13 +98,12 @@ compressNegs (IfElse if' elseifs else') =
   IfElse (negLit *** fmap compressNegs $ if')
          (fmap (negLit *** fmap compressNegs) elseifs)
          (fmap compressNegs else')
-compressNegs (Repeat x body) = Repeat (negLit x) (fmap compressNegs body)
+compressNegs (Repeat (Just x) body) = Repeat (Just $ negLit x) (fmap compressNegs body)
 compressNegs (Switch x cases defaults) = Switch (negLit x)
                                             (fmap (second (fmap compressNegs)) cases)
                                             (fmap compressNegs defaults)
-compressNegs Break = Break
 compressNegs (Return (Just (k, x))) = Return (Just (k, negLit x))
-compressNegs (Return Nothing) = Return Nothing
+compressNegs instr = instr
 
 negLit :: Expr -> Expr
 negLit (Paren x) = Paren (negLit x)

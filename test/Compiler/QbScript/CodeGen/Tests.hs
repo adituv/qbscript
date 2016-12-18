@@ -48,8 +48,11 @@ instrTests =
                    , 0x01, 0x27, 0x0B, 0x00, 0x0D, 0x00, 0x2C, 0x01, 0x2C
                    , 0x01, 0x48, 0x06, 0x00, 0x01, 0x2C, 0x01, 0x28 ]
     it "generates a repeat correctly" $
-      testPacking (putInstr (Repeat (ELit . SmallLit . LitN $ 4) [BareExpr $ ELit LitPassthrough]))
+      testPacking (putInstr (Repeat (Just . ELit . SmallLit . LitN $ 4) [BareExpr $ ELit LitPassthrough]))
         `shouldBe` [ 0x01, 0x20, 0x01, 0x2C, 0x01, 0x21, 0x17, 0x04, 0x00, 0x00, 0x00 ]
+    it "generates an infinite repeat correctly" $
+      testPacking (putInstr (Repeat Nothing [BareExpr $ ELit LitPassthrough]))
+        `shouldBe` [ 0x01, 0x20, 0x01, 0x2C, 0x01, 0x21 ]
     it "generates a switch/case/default correctly" $
       testPacking (putInstr (Switch (ELit . SmallLit . LitN $ 2)
                                    [(LitN 1, [BareExpr $ ELit LitPassthrough])

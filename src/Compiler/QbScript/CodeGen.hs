@@ -63,11 +63,13 @@ putInstr (IfElse if' elseifs else') = do
 
     fillOffsetHole nh
     mapM_ fillOffsetHole lhs
-putInstr (Repeat expr body) = do
+putInstr (Repeat reps body) = do
   putWord16BE 0x0120
   mapM_ putInstr body
   putWord16BE 0x0121
-  putExpr expr
+  case reps of
+    Nothing -> pure ()
+    Just e -> putExpr e
 putInstr (Switch expr cases default') = putSwitch expr cases default'
 putInstr Break = putWord16BE 0x0122
 putInstr (Return Nothing) = putWord16BE 0x0129

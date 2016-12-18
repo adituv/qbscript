@@ -272,7 +272,7 @@ else' =  rword "else" *> newline *> instructions
 
 repeat :: Parser Instruction
 repeat = flip Repeat <$> between (rword "begin" <* newline) (rword "repeat") instructions
-                     <*> parens expr
+                     <*> optional (parens expr)
 
 switch :: Parser Instruction
 switch = Switch <$> (rword "switch" *> expr <* newline)

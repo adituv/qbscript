@@ -137,7 +137,10 @@ instructionTests =
                              [BareExpr $ BareCall (QbName "doNothing") []]
     it "can parse a begin/repeat" $
       parse instruction "" "begin\n  doSomething()\nrepeat (4)" `shouldParse`
-        Repeat (ELit . SmallLit . LitN $ 4) [BareExpr $ BareCall (QbName "doSomething") []]
+        Repeat (Just . ELit . SmallLit . LitN $ 4) [BareExpr $ BareCall (QbName "doSomething") []]
+    it "can parse an infinite begin/repeat" $
+      parse instruction "" "begin\n doSomething()\nrepeat" `shouldParse`
+        Repeat Nothing [BareExpr $ BareCall (QbName "doSomething") []]
     it "can parse a switch without default" $
       parse instruction "" "switch %i\ncase 1:\n  doSomething()\n  break\nendswitch" `shouldParse`
         Switch (ELit . SmallLit . LitKey . Local . QbName $ "i")
