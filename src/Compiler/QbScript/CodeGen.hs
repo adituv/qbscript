@@ -161,13 +161,14 @@ putElseIfs = mapM_ putElseIf
       modify $ updateHoles nh' lh'
 
 putElse :: [Instruction] -> StateT BranchState Packing ()
+putElse [] = pure ()
 putElse body = do
   BranchState nh lastHoles <- get
   h' <- lift $ do
     putWord8 0x01
-    fillOffsetHole nh
     putWord8 0x48
     nextHole <- putOffsetHole
+    fillOffsetHole nh
     mapM_ putInstr body
     return nextHole
 
