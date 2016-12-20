@@ -25,27 +25,18 @@ ident = alpha ++ ['0'..'9'] ++ "_"
 identChar :: Parser Char
 identChar = oneOf ident
 
-spaceChar' :: Parser ()
-spaceChar' = void (char ' ' <|> char '\t')
-
 opChar :: Parser Char
 opChar = oneOf ".:+-*/=<>&|^"
 
 spaceConsumer :: Parser ()
-spaceConsumer = L.space spaceChar'
+spaceConsumer = L.space (() <$ spaceChar)
                         (L.skipLineComment "//")
                         (L.skipBlockComment "/*" "*/")
 
-blockKeywords :: [String]
-blockKeywords = [ "if", "else", "elseif", "endif", "begin", "repeat", "script", "endscript"
-                , "switch", "case", "default", "endswitch" ]
-
-blockKeyword :: Parser String
-blockKeyword = choice $ fmap (try . symbol) blockKeywords
-
 reservedWords :: [String]
-reservedWords = blockKeywords ++ [ "break", "random", "random2"
-                , "randomrange", "randomrange2", "randompermute", "randomshuffle", "not"
+reservedWords = [ "if", "else", "elseif", "repeat", "script", "switch", "case"
+                , "default", "break", "random", "random2", "randomrange"
+                , "randomrange2", "randompermute", "randomshuffle", "not"
                 , "useheap" ]
 
 lexeme :: Parser a -> Parser a
@@ -129,9 +120,8 @@ passthrough = void (symbol "<...>")
 -- * Parser
 
 qbScript :: Parser QbScript
-qbScript = QbScript <$> (rword "script" *> parens (optional struct) <* newline)
-                    <*> many instruction
-                    <*  rword "endscript"
+qbScript = QbScript <$> (rword "script" *> parens (optional struct))
+                    <*> braces (many instruction)
 
 -- * Literals
 
@@ -165,12 +155,10 @@ qbKey =  QbCrc <$> checksum
      <|> QbName <$> identifier
 
 dict :: Parser Dict
-dict = braces $ optional newline *>
-         (Dict <$> dict')
+dict = Dict <$> braces dict'
   where
     dict' :: Parser [(Maybe QbKey, Expr)]
-    dict' = entry `sepBy` (comma <* optional newline)
-         <*  optional newline
+    dict' = entry `sepBy` comma
 
     entry :: Parser (Maybe QbKey, Expr)
     entry = do
@@ -179,15 +167,12 @@ dict = braces $ optional newline *>
       return (k,v)
 
 array :: Parser Array
-array = Array <$> brackets (optional newline *> expr `sepBy` (comma <* optional newline)
-                         <* optional newline)
+array = Array <$> brackets (expr `sepBy` comma)
 
 -- ** Structs
 
 struct :: Parser Struct
-struct = Struct <$> braces (optional newline
-                         *> structItem `sepBy` try (semicolon <* optional newline <* notFollowedBy (symbol "}"))
-                         <* semicolon <* optional newline)
+struct = Struct <$> braces (structItem `endBy` semicolon)
 
 structItem :: Parser StructItem
 structItem = do
@@ -231,66 +216,70 @@ qbValue QbTStringQs = QbStringQs <$> qbKey
 
 
 qbArray :: QbType -> Parser QbArray
-qbArray t = brackets $ QbArr t <$> qbValue t `sepBy` (comma <* optional newline)
+qbArray t = brackets $ QbArr t <$> qbValue t `sepBy` comma
 
 -- * Instructions
-
-lineTerm :: Parser ()
-lineTerm = newline <|> eof
 
 instructions :: Parser [Instruction]
 instructions = many instruction
 
 instruction :: Parser Instruction
 instruction = choice (fmap try
-  [ Assign <$> name <*> (equals *> expr)
+  [ Assign <$> name <*> (equals *> expr) <* semicolon
   , ifelse
   , repeat
   , switch
-  , Break <$ rword "break"
-  , Return <$> (rword "return" *> optional (parens argument <|> argument))
-  , BareExpr <$> expr
-  ]) <* lineTerm
+  , Break <$ rword "break" <* semicolon
+  , Return <$> (rword "return" *> optional (parens argument <|> argument)) <* semicolon
+  , BareExpr <$> expr <* semicolon
+  ])
 
 ifelse :: Parser Instruction
 ifelse = IfElse <$> if'
                 <*> many elseif
                 <*> else'
-                <*  rword "endif"
 
 if' :: Parser (Expr, [Instruction])
-if' = (,) <$> (rword "if" *> expr <* newline)
-          <*> instructions
+if' = (,) <$> (rword "if" *> parenExpr)
+          <*> braces instructions
 
 elseif :: Parser (Expr, [Instruction])
-elseif = (,) <$> (rword "elseif" *> expr <* newline)
-             <*> instructions
+elseif = (,) <$> (rword "elseif" *> parenExpr)
+             <*> braces instructions
 
 else' :: Parser [Instruction]
-else' =  rword "else" *> newline *> instructions
+else' =  (rword "else" *> braces instructions)
      <|> pure []
 
 repeat :: Parser Instruction
-repeat = flip Repeat <$> between (rword "begin" <* newline) (rword "repeat") instructions
-                     <*> optional (parens expr)
+repeat = Repeat <$> (rword "repeat" *> optional parenExpr)
+                <*> braces instructions
 
 switch :: Parser Instruction
-switch = Switch <$> (rword "switch" *> expr <* newline)
-                <*> many case'
-                <*> (rword "default:" *> newline *> instructions <|> pure [])
-                <*  rword "endswitch"
-
-case' :: Parser (SmallLit, [Instruction])
-case' = (,) <$> (rword "case" *> (smallLit <* colon <* newline))
-            <*> instructions
+switch = do
+    rword "switch"
+    sw <- parenExpr
+    (c, d) <- braces $ do
+                   c' <- many case'
+                   d' <- def
+                   pure (c', d')
+    pure $ Switch sw c d
+  where
+    case' = (,) <$> (rword "case" *> smallLit <* colon)
+                <*> instructions
+    def =  (rword "default" *> colon *> instructions)
+       <|> pure []
 
 -- * Expressions
 expr :: Parser Expr
 expr = makeExprParser term opTable
 
+parenExpr :: Parser Expr
+parenExpr = Paren <$> parens expr
+
 term :: Parser Expr
 term = choice (fmap try
-  [ Paren <$> parens expr
+  [ parenExpr
   , MethodCall <$> (name <* colon) <*> qbKey <*> parens (try argument `sepBy` comma)
   , BareCall <$> qbKey <*> parens (try argument `sepBy` comma)
   , ELit <$> lit

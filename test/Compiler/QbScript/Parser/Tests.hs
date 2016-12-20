@@ -112,57 +112,57 @@ instructionTests =
   describe "instruction" $ do
     it "can parse an assignment by name" $ property $
       \(Ident xs) -> fmap toLower xs `notElem` reservedWords
-          ==> parse instruction "" (fromString $ xs ++ " = 1.0") `shouldParse`
+          ==> parse instruction "" (fromString $ xs ++ " = 1.0;") `shouldParse`
              Assign (NonLocal $ QbName xs) (ELit (LitF 1))
     it "can parse an assignment by checksum" $ property $
-      \c@(Checksum x) -> parse instruction "" (fromString $ "%$" ++ show c ++ " = 1.0") `shouldParse`
+      \c@(Checksum x) -> parse instruction "" (fromString $ "%$" ++ show c ++ " = 1.0;") `shouldParse`
           Assign (Local $ QbCrc x) (ELit (LitF 1))
     it "can parse an if with no else branches" $
-      parse instruction "" "if 1.0\n  doSomething()\nendif" `shouldParse`
-        IfElse (ELit (LitF 1), [BareExpr $ BareCall (QbName "doSomething") []]) [] []
+      parse instruction "" "if (1.0) {\n  doSomething();\n}" `shouldParse`
+        IfElse (Paren (ELit (LitF 1)), [BareExpr $ BareCall (QbName "doSomething") []]) [] []
     it "can parse an if/elseif" $
-      parse instruction "" "if 1.0\n  doSomething()\nelseif 2.0\n  doNothing()\nendif"
-        `shouldParse` IfElse (ELit (LitF 1), [BareExpr $ BareCall (QbName "doSomething") []])
-                             [(ELit (LitF 2), [BareExpr $ BareCall (QbName "doNothing") []])]
+      parse instruction "" "if (1.0) {\n  doSomething();\n} elseif (2.0) {\n  doNothing();\n}"
+        `shouldParse` IfElse (Paren (ELit (LitF 1)), [BareExpr $ BareCall (QbName "doSomething") []])
+                             [(Paren (ELit (LitF 2)), [BareExpr $ BareCall (QbName "doNothing") []])]
                              []
     it "can parse an if/else" $
-      parse instruction "" "if 1.0\n  doSomething()\nelse\n  doNothing()\nendif"
-        `shouldParse` IfElse (ELit (LitF 1), [BareExpr $ BareCall (QbName "doSomething") []])
+      parse instruction "" "if (1.0) {\n  doSomething();\n} else {\n  doNothing();\n}"
+        `shouldParse` IfElse (Paren (ELit (LitF 1)), [BareExpr $ BareCall (QbName "doSomething") []])
                              []
                              [BareExpr $ BareCall (QbName "doNothing") []]
     it "can parse an if/elseif/else" $
-      parse instruction "" "if 1.0\n  doSomething()\nelseif 2.0\n  doNothing()\nelse\n  doNothing()\nendif"
-        `shouldParse` IfElse (ELit (LitF 1), [BareExpr $ BareCall (QbName "doSomething") []])
-                             [(ELit (LitF 2), [BareExpr $ BareCall (QbName "doNothing") []])]
+      parse instruction "" "if (1.0) {\n  doSomething();\n} elseif (2.0) {\n  doNothing();\n} else{ \n  doNothing();\n}"
+        `shouldParse` IfElse (Paren (ELit (LitF 1)), [BareExpr $ BareCall (QbName "doSomething") []])
+                            [(Paren (ELit (LitF 2)), [BareExpr $ BareCall (QbName "doNothing") []])]
                              [BareExpr $ BareCall (QbName "doNothing") []]
     it "can parse a begin/repeat" $
-      parse instruction "" "begin\n  doSomething()\nrepeat (4)" `shouldParse`
-        Repeat (Just . ELit . SmallLit . LitN $ 4) [BareExpr $ BareCall (QbName "doSomething") []]
+      parse instruction "" "repeat (4) {\n  doSomething();\n}" `shouldParse`
+        Repeat (Just . Paren . ELit . SmallLit . LitN $ 4) [BareExpr $ BareCall (QbName "doSomething") []]
     it "can parse an infinite begin/repeat" $
-      parse instruction "" "begin\n doSomething()\nrepeat" `shouldParse`
+      parse instruction "" "repeat {\n doSomething();\n}" `shouldParse`
         Repeat Nothing [BareExpr $ BareCall (QbName "doSomething") []]
     it "can parse a switch without default" $
-      parse instruction "" "switch %i\ncase 1:\n  doSomething()\n  break\nendswitch" `shouldParse`
-        Switch (ELit . SmallLit . LitKey . Local . QbName $ "i")
+      parse instruction "" "switch (%i) {\ncase 1:\n  doSomething();\n  break;\n}" `shouldParse`
+        Switch (Paren . ELit . SmallLit . LitKey . Local . QbName $ "i")
                [(LitN 1, [BareExpr $ BareCall (QbName "doSomething") [], Break] )]
                []
     it "can parse a switch with default" $
-      parse instruction "" "switch %i\ncase 1:\n  doSomething()\n  break\ndefault:\n  doNothing()\nendswitch" `shouldParse`
-        Switch (ELit . SmallLit . LitKey . Local . QbName $ "i")
+      parse instruction "" "switch (%i) {\ncase 1:\n  doSomething();\n  break;\ndefault:\n  doNothing();\n}" `shouldParse`
+        Switch (Paren . ELit . SmallLit . LitKey . Local . QbName $ "i")
                [(LitN 1, [BareExpr $ BareCall (QbName "doSomething") [], Break] )]
                [BareExpr $ BareCall (QbName "doNothing") []]
     it "can parse a break" $
-      parse instruction "" "break" `shouldParse` Break
+      parse instruction "" "break;" `shouldParse` Break
     it "can parse a no-value return" $
-      parse instruction "" "return" `shouldParse` Return Nothing
+      parse instruction "" "return;" `shouldParse` Return Nothing
     it "can parse a non-keyword return" $
-      parse instruction "" "return 3" `shouldParse` Return (Just (Nothing, ELit (SmallLit (LitN 3))))
+      parse instruction "" "return 3;" `shouldParse` Return (Just (Nothing, ELit (SmallLit (LitN 3))))
     it "can parse a keyword return" $
-      parse instruction "" "return (x=2.0)" `shouldParse` Return (Just (Just $ QbName "x", ELit (LitF 2)))
+      parse instruction "" "return (x=2.0);" `shouldParse` Return (Just (Just $ QbName "x", ELit (LitF 2)))
     it "can parse a keyword return by crc" $
-      parse instruction "" "return ($1234abcd=2.0)" `shouldParse` Return (Just (Just $ QbCrc 0x1234abcd, ELit (LitF 2)))
+      parse instruction "" "return ($1234abcd=2.0);" `shouldParse` Return (Just (Just $ QbCrc 0x1234abcd, ELit (LitF 2)))
     it "can parse a bare call expression" $
-      parse instruction "" "doSomething()"
+      parse instruction "" "doSomething();"
         `shouldParse` BareExpr (BareCall (QbName "doSomething") [])
 
 termTests :: Spec
@@ -244,15 +244,15 @@ structTests :: Spec
 structTests =
   describe "struct" $ do
     it "should parse a 1-item struct" $ do
-      parse struct "" "{\n\tqbkey x = $00000000;\n}" `shouldParse`
+      parse struct "" "{qbkey x = $00000000;}" `shouldParse`
         Struct [StructItem QbTKey (QbName "x") (QbKey $ QbCrc 0)]
-      parse struct "" "{\n\tqbkeyref x = $00000000;\n}" `shouldParse`
+      parse struct "" "{qbkeyref x = $00000000;}" `shouldParse`
         Struct [StructItem QbTKeyRef (QbName "x") (QbKeyRef $ QbCrc 0)]
     it "can parse arrays of all types" $ do
-      parse struct "" "{\n\tarray<int> _ = [1,2,3];\n}" `shouldParse`
+      parse struct "" "{array<int> _ = [1,2,3];}" `shouldParse`
         Struct [StructItem (QbTArray QbTInteger) (QbCrc 0) (QbArray . QbArr QbTInteger
                                               $ [QbInteger 1, QbInteger 2, QbInteger 3])]
-      parse struct "" "{\n\tarray<float> _ = [1.0, 2.0, 3.0];\n}" `shouldParse`
+      parse struct "" "{array<float> _ = [1.0, 2.0, 3.0];}" `shouldParse`
         Struct [StructItem (QbTArray QbTFloat) (QbCrc 0) (QbArray . QbArr QbTFloat
                                               $ [QbFloat 1, QbFloat 2, QbFloat 3])]
       parse struct "" "{\n\tarray<string> _ = ['a', 'b'];\n}" `shouldParse`
@@ -283,6 +283,8 @@ qbScriptTests :: Spec
 qbScriptTests =
   describe "qbScript" $ do
     it "should parse an empty script" $
-      parse qbScript "" "script()\nendscript" `shouldParse` QbScript Nothing []
+      parse qbScript "" "script () {\n}" `shouldParse` QbScript Nothing []
     -- TODO: sample scripts
-    return ()
+    it "should parse repeat inside if" $
+      parse qbScript "" "script() {  if(<...>) { repeat { break; }}}" `shouldParse`
+        QbScript Nothing [IfElse (Paren . ELit $ LitPassthrough, [Repeat Nothing [Break]]) [] []]
