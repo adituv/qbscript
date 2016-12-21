@@ -328,7 +328,7 @@ putInfix op e1 e2 = do
 --       reset the position
 putStruct :: Struct -> ReaderT Int Packing ()
 putStruct (Struct items) = do
-  lift $ putWord32BE 0x00010000
+  lift $ putWord32BE 0x00000100
   firstEntry <- lift putHoleWord32BE
   lastHole   <- flip execStateT firstEntry
               . mapM_ putStructItem
