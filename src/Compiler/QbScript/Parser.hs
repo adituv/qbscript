@@ -240,11 +240,11 @@ ifelse = IfElse <$> if'
                 <*> else'
 
 if' :: Parser (Expr, [Instruction])
-if' = (,) <$> (rword "if" *> parenExpr)
+if' = (,) <$> (rword "if" *> parens expr)
           <*> braces instructions
 
 elseif :: Parser (Expr, [Instruction])
-elseif = (,) <$> (rword "elseif" *> parenExpr)
+elseif = (,) <$> (rword "elseif" *> parens expr)
              <*> braces instructions
 
 else' :: Parser [Instruction]
@@ -252,13 +252,13 @@ else' =  (rword "else" *> braces instructions)
      <|> pure []
 
 repeat :: Parser Instruction
-repeat = Repeat <$> (rword "repeat" *> optional parenExpr)
+repeat = Repeat <$> (rword "repeat" *> optional (parens expr))
                 <*> braces instructions
 
 switch :: Parser Instruction
 switch = do
     rword "switch"
-    sw <- parenExpr
+    sw <- parens expr
     (c, d) <- braces $ do
                    c' <- many case'
                    d' <- def
@@ -274,12 +274,9 @@ switch = do
 expr :: Parser Expr
 expr = makeExprParser term opTable
 
-parenExpr :: Parser Expr
-parenExpr = Paren <$> parens expr
-
 term :: Parser Expr
 term = choice (fmap try
-  [ parenExpr
+  [ Paren <$> expr
   , MethodCall <$> (name <* colon) <*> qbKey <*> parens (try argument `sepBy` comma)
   , BareCall <$> qbKey <*> parens (try argument `sepBy` comma)
   , ELit <$> lit
