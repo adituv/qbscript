@@ -276,7 +276,7 @@ expr = makeExprParser term opTable
 
 term :: Parser Expr
 term = choice (fmap try
-  [ Paren <$> expr
+  [ Paren <$> parens expr
   , MethodCall <$> (name <* colon) <*> qbKey <*> parens (try argument `sepBy` comma)
   , BareCall <$> qbKey <*> parens (try argument `sepBy` comma)
   , ELit <$> lit
